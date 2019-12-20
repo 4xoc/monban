@@ -1,0 +1,23 @@
+# Monban main configuration file
+
+host_uri: ldap://localhost:389
+user_dn: "cn=root,dc=my-domain,dc=com"
+user_password: secret
+enable_ssh_public_keys: true
+group_dir: groups
+people_dir: people
+
+root_dn: dc=my-domain,dc=com
+people_rdn: ou=people
+group_rdn: ou=groups
+
+generate_uid: true
+min_uid: 1000
+max_uid: 1500
+
+defaults:
+  mail: "%g.%l@my-domain.com"
+  user_password: "{SASL}%u"
+  display_name: "%g %l"
+  home_dir: /tmp/
+  login_shell: /bin/sh

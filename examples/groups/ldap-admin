@@ -1,0 +1,6 @@
+cn: ldap-admin
+description: This group gives total and unrestricted access to anything within openLDAP. With great power comes great responsibility!
+
+members:
+  - johndoe
+  - peterpan
