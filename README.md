@@ -177,10 +177,10 @@ single values can also be defined like a singe string.
 | Attribute | Mandatory | Description |
 |-----------|-----------|-------------|
 | name | yes | Name of the role (also cn) |
-| sudo_command | yes | Commands the rule applies to. |
-| sudo_user | yes | User (or group) the rule applies to. |
+| sudo_command | no | Commands the rule applies to. |
+| sudo_user | no | User (or group) the rule applies to. |
 | description | no | Description of the rule. |
-| sudo_host | yes | Hosts the rule applies to. |
+| sudo_host | no | Hosts the rule applies to. |
 | sudo_option | no | Options for the rule. |
 | sudo_run_as_user | no | Limit of user to run command as. |
 | sudo_run_as_group | no | Limit of group to run command as. |
