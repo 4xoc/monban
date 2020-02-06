@@ -1,0 +1,17 @@
+disable_defaults: false
+
+roles:
+# allow all commands for QA and DevOps
+ - name: allow-all
+   sudo_command: ALL
+   sudo_user:
+     - "%devops"
+     - "%qa"
+
+ - name: allow-some
+   sudo_command:
+     - /bin/ls
+     - /bin/bla
+   sudo_user:
+     - "%devops"
+     - "%qa"

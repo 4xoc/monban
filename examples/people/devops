@@ -11,4 +11,4 @@ objects:
     given_name: Peter
     surname: Pan
     uid_number: 14356
-    userPassword: "{SMD5}4QWGWZpj9GCmfuqEvm8HtZhZS6E="
+    user_password: "{SMD5}4QWGWZpj9GCmfuqEvm8HtZhZS6E="

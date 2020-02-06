@@ -193,6 +193,7 @@ func ldapLoadGroups() error {
 		k     int
 		group *groupOfNames
 		ou    *organizationalUnit
+		sudo  *sudoRole
 		class string
 	)
 
@@ -226,10 +227,12 @@ func ldapLoadGroups() error {
 
 		group = new(groupOfNames)
 		ou = new(organizationalUnit)
+		sudo = new(sudoRole)
 
 		// set DN for all objects as it is unknown which object it is
 		group.dn = sr.Entries[i].DN
 		ou.dn = sr.Entries[i].DN
+		sudo.dn = sr.Entries[i].DN
 
 		// go through all attributes
 		for j = range sr.Entries[i].Attributes {
@@ -241,7 +244,7 @@ func ldapLoadGroups() error {
 			case "objectClass":
 				// there is more than one objectClass
 				for _, class = range sr.Entries[i].Attributes[j].Values {
-					if class == "groupOfNames" || class == "organizationalUnit" {
+					if class == "groupOfNames" || class == "organizationalUnit" || class == "sudoRole" {
 						break
 					}
 				}
@@ -251,9 +254,11 @@ func ldapLoadGroups() error {
 
 			case "cn":
 				group.CN = sr.Entries[i].Attributes[j].Values[0]
+				sudo.CN = sr.Entries[i].Attributes[j].Values[0]
 
 			case "description":
 				group.Description = sr.Entries[i].Attributes[j].Values[0]
+				sudo.Description = sr.Entries[i].Attributes[j].Values[0]
 
 			case "member":
 				// rewrite members to UIDs only as this the format used in config files
@@ -267,6 +272,34 @@ func ldapLoadGroups() error {
 
 					group.Members = append(group.Members, strings.Split(sr.Entries[i].Attributes[j].Values[k], ",")[0][4:])
 				}
+
+			case "sudoUser":
+				sudo.SudoUser = sr.Entries[i].Attributes[j].Values
+
+			case "sudoHost":
+				sudo.SudoHost = sr.Entries[i].Attributes[j].Values
+
+			case "sudoCommand":
+				sudo.SudoCommand = sr.Entries[i].Attributes[j].Values
+
+			case "sudoOption":
+				sudo.SudoOption = sr.Entries[i].Attributes[j].Values
+
+			case "sudoRunAsUser":
+				sudo.SudoRunAsUser = sr.Entries[i].Attributes[j].Values
+
+			case "sudoRunAsGroup":
+				sudo.SudoRunAsGroup = sr.Entries[i].Attributes[j].Values
+
+			case "sudoNotBefore":
+				sudo.SudoNotBefore = sr.Entries[i].Attributes[j].Values
+
+			case "sudoNotAfter":
+				sudo.SudoNotAfter = sr.Entries[i].Attributes[j].Values
+
+			case "sudoOrder":
+				sudo.SudoOrder = new(int)
+				*sudo.SudoOrder, _ = strconv.Atoi(sr.Entries[i].Attributes[j].Values[0])
 			}
 		}
 
@@ -290,6 +323,11 @@ func ldapLoadGroups() error {
 		case "organizationalUnit":
 			ldapOUs = append(ldapOUs, ou)
 			glg.Debugf("found ldap intermediate OU %s", ou.dn)
+
+		case "sudoRole":
+			ldapSudoRoles = append(ldapSudoRoles, *sudo)
+			glg.Debugf("found ldap sudoRole %s", sudo.dn)
+
 		}
 	}
 
@@ -302,8 +340,6 @@ func ldapDeleteGroupOfNamesMember(group string, user string) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
-
-	glg.Debugf("deleting groupdOfNames member in %s", group)
 
 	modify = ldap.NewModifyRequest(group, nil)
 	modify.Delete("member", []string{user})
@@ -318,8 +354,6 @@ func ldapDeletePosixAccount(dn string) error {
 		modify      *ldap.ModifyRequest
 		dnFragments []string
 	)
-
-	glg.Debugf("deleting posixAccount %s", dn)
 
 	// delete user object
 	if err = ldapCon.Del(&ldap.DelRequest{
@@ -341,7 +375,7 @@ func ldapDeletePosixAccount(dn string) error {
 }
 
 // ldapCreatePosixAccount creates a new posixAccount object in LDAP
-func ldapCreatePosixAccount(user *posixAccount) error {
+func ldapCreatePosixAccount(user posixAccount) error {
 	var (
 		err      error
 		add      *ldap.AddRequest
@@ -410,7 +444,7 @@ func ldapCreatePosixAccount(user *posixAccount) error {
 }
 
 // ldapUpdatePosixAccount updates an existing posixAccount object in LDAP
-func ldapUpdatePosixAccount(user *posixAccount) error {
+func ldapUpdatePosixAccount(user posixAccount) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
@@ -506,7 +540,7 @@ func ldapCreatePosixGroup(group posixGroup) error {
 }
 
 // ldapUpdatePosixGroup updates a given posixGroup on LDAP target
-func ldapUpdatePosixGroup(group *posixGroup) error {
+func ldapUpdatePosixGroup(group posixGroup) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
@@ -524,17 +558,6 @@ func ldapUpdatePosixGroup(group *posixGroup) error {
 	}
 
 	return ldapCon.Modify(modify)
-}
-
-// ldapDeletePosixGroup deletes a posixGroup on LDAP target
-func ldapDeletePosixGroup(ou string) error {
-
-	glg.Debugf("deleting posixGroup %s", ou)
-
-	return ldapCon.Del(&ldap.DelRequest{
-		DN:       ou,
-		Controls: nil,
-	})
 }
 
 // ldapCreateGroupOfNames creates a new user group on LDAP target
@@ -560,7 +583,7 @@ func ldapCreateGroupOfNames(group groupOfNames) error {
 }
 
 // ldapUpdateGroupOfNames updates an existing groupOfNames object in LDAP
-func ldapUpdateGroupOfNames(group *groupOfNames) error {
+func ldapUpdateGroupOfNames(group groupOfNames) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
@@ -597,21 +620,142 @@ func ldapCreateOrganisationalUnit(ou *organizationalUnit) error {
 	return ldapCon.Add(add)
 }
 
-// ldapDeleteOrianisationalUnit deletes an OU on LDAP target
-func ldapDeleteOrianisationalUnit(ou string) error {
-	glg.Debugf("deleting organizationalUnit %s", ou)
-
+// ldapDeleteObject deletes any object identified by its dn
+func ldapDeleteObject(dn string) error {
 	return ldapCon.Del(&ldap.DelRequest{
-		DN:       ou,
+		DN:       dn,
 		Controls: nil,
 	})
 }
 
-func ldapDeleteGroupOfNames(ou string) error {
-	glg.Debugf("deleting groupOfNames %s", ou)
+// ldapCreateSudoRole creates a new sudoRole on LDAP target
+func ldapCreateSudoRole(role sudoRole) error {
+	var (
+		add *ldap.AddRequest
+	)
 
-	return ldapCon.Del(&ldap.DelRequest{
-		DN:       ou,
-		Controls: nil,
-	})
+	glg.Debugf("creating sudoRole %s", role.dn)
+
+	add = ldap.NewAddRequest(role.dn, nil)
+
+	add.Attribute("objectClass", []string{
+		"sudoRole",
+		"top"})
+
+	// cn & description are always set
+	add.Attribute("cn", []string{role.CN})
+	add.Attribute("description", []string{role.Description})
+
+	if role.SudoOrder != nil {
+		add.Attribute("sudoOrder", []string{strconv.Itoa(*role.SudoOrder)})
+	}
+
+	if len(role.SudoUser) > 0 {
+		add.Attribute("sudoUser", role.SudoUser)
+	}
+
+	if len(role.SudoHost) > 0 {
+		add.Attribute("sudoHost", role.SudoHost)
+	}
+
+	if len(role.SudoCommand) > 0 {
+		add.Attribute("sudoCommand", role.SudoCommand)
+	}
+
+	if len(role.SudoOption) > 0 {
+		add.Attribute("sudoOption", role.SudoOption)
+	}
+
+	if len(role.SudoRunAsUser) > 0 {
+		add.Attribute("sudoRunAsUser", role.SudoRunAsUser)
+	}
+
+	if len(role.SudoRunAsGroup) > 0 {
+		add.Attribute("sudoRunAsGroup", role.SudoRunAsGroup)
+	}
+
+	if len(role.SudoNotBefore) > 0 {
+		add.Attribute("sudoNotBefore", role.SudoNotBefore)
+	}
+
+	if len(role.SudoNotAfter) > 0 {
+		add.Attribute("sudoNotAfter", role.SudoNotAfter)
+	}
+
+	return ldapCon.Add(add)
+}
+
+// ldapUpdateSudoRole updates an existing sudoRole on LDAP target; doesn't update CN
+func ldapUpdateSudoRole(role sudoRole) error {
+	var (
+		modify *ldap.ModifyRequest
+	)
+
+	// this is different than other updates as values can be deleted
+
+	glg.Debugf("updating sudoRole %s", role.dn)
+
+	modify = ldap.NewModifyRequest(role.dn, nil)
+
+	// can be deleted
+	if role.SudoOrder != nil {
+		modify.Replace("sudoOrder", []string{strconv.Itoa(*role.SudoOrder)})
+	} else {
+		modify.Replace("sudoOrder", []string{})
+	}
+
+	// is always "Managed by Monban" or something configured in file - never empty
+	if role.Description != "" {
+		modify.Replace("description", []string{role.Description})
+	}
+
+	if len(role.SudoUser) > 0 {
+		modify.Replace("sudoUser", role.SudoUser)
+	} else {
+		modify.Replace("sudoUser", []string{})
+	}
+
+	if len(role.SudoHost) > 0 {
+		modify.Replace("sudoHost", role.SudoHost)
+	} else {
+		modify.Replace("sudoHost", []string{})
+	}
+
+	if len(role.SudoCommand) > 0 {
+		modify.Replace("sudoCommand", role.SudoCommand)
+	} else {
+		modify.Replace("sudoCommand", []string{})
+	}
+
+	if len(role.SudoOption) > 0 {
+		modify.Replace("sudoOption", role.SudoOption)
+	} else {
+		modify.Replace("sudoOption", []string{})
+	}
+
+	if len(role.SudoRunAsUser) > 0 {
+		modify.Replace("sudoRunAsUser", role.SudoRunAsUser)
+	} else {
+		modify.Replace("sudoRunAsUser", []string{})
+	}
+
+	if len(role.SudoRunAsGroup) > 0 {
+		modify.Replace("sudoRunAsGroup", role.SudoRunAsGroup)
+	} else {
+		modify.Replace("sudoRunAsGroup", []string{})
+	}
+
+	if len(role.SudoNotBefore) > 0 {
+		modify.Replace("sudoNotBefore", role.SudoNotBefore)
+	} else {
+		modify.Replace("sudoNotBefore", []string{})
+	}
+
+	if len(role.SudoNotAfter) > 0 {
+		modify.Replace("sudoNotAfter", role.SudoNotAfter)
+	} else {
+		modify.Replace("sudoNotAfter", []string{})
+	}
+
+	return ldapCon.Modify(modify)
 }

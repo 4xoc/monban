@@ -7,7 +7,10 @@ temp = $(subst /, ,$@)
 os = $(word 1, $(temp))
 arch = $(word 2, $(temp))
 
-release: $(PLATFORMS)
+default:
+	go build -ldflags '-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X "main.Date=${TIME}"' -o monban *.go
+
+release: $(PLATFORMS) checksums
 
 $(PLATFORMS):
 	GOOS=$(os) GOARCH=$(arch) go build \
@@ -15,12 +18,11 @@ $(PLATFORMS):
     -o monban-${VERSION}.$(os)-$(arch) *.go && \
     tar -zcf monban-${VERSION}.$(os)-$(arch).tar.gz monban-${VERSION}.$(os)-$(arch)
 
-all: release checksums
-
 checksums:
 	sha256sum *tar.gz > sha256sums.txt
 
 clean:
 	rm -f *.tar.gz || true
 	rm -f monban-* || true
+	rm -f monban || true
 	rm -f sha256sums.txt || true

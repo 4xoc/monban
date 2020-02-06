@@ -3,3 +3,4 @@ description: Default host in prod.
 
 members:
   - johndoe
+  - peterpan

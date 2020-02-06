@@ -19,11 +19,12 @@ Since Monban considers the configuration files as the single source of truth, it
 
 * working LDAP system
 * nis schema
+* (optional, but recommended) [sudo schema](resources/sudo.schema) for SUDOers roles
 * (optional, but recommended) [ssh schema](resources/ssh.schema) for SSH public keys
 
 ## Roadmap
 
-* add support for SUDOers objects
+* add web UI for password changes independently of config files
 
 ## Usage
 
@@ -36,6 +37,8 @@ Monban has some commands that can be executed:
 * audit - Prints the current configs in a nicer way for easy access audits. This doesn't check for drifts beforehand so be sure that `diff` or `sync` has been run before as otherwise the audit output might be incorrect.
 
 For more details on the commands and flags run `monban help`.
+
+**Note:** Due to the implementation of sudoRole object updates a `diff` command will not show the changes to be made but the whole object as it shall exist on the target ldap host.
 
 ### Configuring Monban
 
@@ -60,7 +63,8 @@ to then find all other configuration files thay might exist.
 | group_rdn | no | RDN of where to add groups under. Must alreadt exist. Default: same as root_dn |
 | generate_uid | no | When true Monban will automatically pick the next available UID for a user object. Default: false |
 | min_uid | no | Min UID when generating UIDs. |
-| max_uid | no | Max UID when generating UIDs, |
+| max_uid | no | Max UID when generating UIDs. |
+| enable_sudo | no | When true, SUDOers roles will also be managed by Monban. Default: false |
 | defaults | no | Defines various default templates (see next table and [Templating](#templating)). |
 
 **Default attributes:**
@@ -148,6 +152,20 @@ members:
   - johndoe
   - peterpan
 ```
+
+#### SUDOers Configuration
+
+Import the [sudo schema](resources/sudo.schema) (see https://linux.die.net/man/5/sudoers.ldap for details) and set
+`enable_sudo` to true. If `enable_sudo` is not true, all SUDOers roles will be ignored. Note that a default sudoRule
+("cn=Defaults") is only set if at least one role is also defined in a groups file. This prevents spamming the directory
+with many unused sudoRules.
+
+Except for `name` and `description` Monban allows more than one value for any given attribute. Those will be created as
+individual attributes with single values on the LDAP target system. Monban **doesn't** validate any of the SUDOers
+roles defined but only verifies that required values are set. Have a look at [this page](https://www.sudo.ws/man/1.8.13/sudoers.ldap.man.html)
+for details about the sudoRole object.
+
+
 ## Templating
 
 Templating allows for dynamic attribute generation of people objects. Attributes that follow a common pattern like mail

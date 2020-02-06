@@ -1,0 +1,12 @@
+disable_defaults: false
+
+roles:
+# only DevOps may use all commands
+ - name: allow-all
+   sudo_command: ALL
+   sudo_user: "%devops"
+
+# qa may only ls
+ - name: allow-limited
+   sudo_command: /sbin/ls
+   sudo_user: "%qa"

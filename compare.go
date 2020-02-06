@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 
 	"github.com/kpango/glg"
@@ -16,7 +17,7 @@ func compareOUs() error {
 		task  *actionTask
 	)
 
-	// sort both maps before comparing them
+	// sort both slices before comparing them
 	// sorting is done by length of DN to make sure parent DNs (which are shorter, duh) come before children
 	sort.Slice(localOUs, func(i, j int) bool {
 		return len(localOUs[i].dn) < len(localOUs[j].dn)
@@ -40,11 +41,9 @@ func compareOUs() error {
 		if !match {
 			glg.Debugf("marked intermediate OU for creation %s", localOUs[i].dn)
 			task = new(actionTask)
-			task.objectType = objectTypeOrganisationalUnit
-			task.taskType = taskTypeCreate
 			task.data = localOUs[i]
-
-			taskList = append(taskList, task)
+			taskList[objectTypeOrganisationalUnit][taskTypeCreate] = append(taskList[objectTypeOrganisationalUnit][taskTypeCreate], task)
+			taskListCount++
 		}
 	}
 
@@ -62,11 +61,9 @@ func compareOUs() error {
 		if !match {
 			glg.Debugf("marked intermediate OU for deletion %s", ldapOUs[i].dn)
 			task = new(actionTask)
-			task.objectType = objectTypeOrganisationalUnit
-			task.taskType = taskTypeDelete
-			task.dn = ldapOUs[i].dn
-
-			taskList = append(taskList, task)
+			task.dn = &ldapOUs[i].dn
+			taskList[objectTypeOrganisationalUnit][taskTypeDelete] = append(taskList[objectTypeOrganisationalUnit][taskTypeDelete], task)
+			taskListCount++
 		}
 	}
 
@@ -85,7 +82,7 @@ func comparePosixGroups() error {
 		ok             bool
 		err            error
 		groupIsMissing bool
-		missmatch      bool
+		mismatch       bool
 	)
 
 	glg.Info("comparing posixGroups")
@@ -94,7 +91,7 @@ func comparePosixGroups() error {
 	for dn = range localPeople {
 		// reset
 		groupIsMissing = false
-		missmatch = false
+		mismatch = false
 
 		// check if group already exists in LDAP
 		if _, ok = ldapPeople[dn]; !ok {
@@ -104,11 +101,9 @@ func comparePosixGroups() error {
 
 			// add task to create group
 			task = new(actionTask)
-			task.dn = dn
-			task.objectType = objectTypePosixGroup
-			task.taskType = taskTypeCreate
 			task.data = localPeople[dn]
-			taskList = append(taskList, task)
+			taskList[objectTypePosixGroup][taskTypeCreate] = append(taskList[objectTypePosixGroup][taskTypeCreate], task)
+			taskListCount++
 		}
 
 		// check for localPeopleGroup diff
@@ -120,26 +115,24 @@ func comparePosixGroups() error {
 
 			// gid_number can change
 			if *localPeople[dn].GIDNumber != *ldapPeople[dn].GIDNumber {
-				missmatch = true
+				mismatch = true
 				group.GIDNumber = localPeople[dn].GIDNumber
 			}
 
 			// description can change
 			if localPeople[dn].Description != ldapPeople[dn].Description {
-				missmatch = true
+				mismatch = true
 				group.Description = localPeople[dn].Description
 			}
 
-			if missmatch {
+			if mismatch {
 				glg.Debugf("marked posixGroup for update %s", dn)
 
 				// add task to update group
 				task = new(actionTask)
-				task.dn = dn
-				task.objectType = objectTypePosixGroup
-				task.taskType = taskTypeUpdate
-				task.data = group
-				taskList = append(taskList, task)
+				task.data = *group
+				taskList[objectTypePosixGroup][taskTypeUpdate] = append(taskList[objectTypePosixGroup][taskTypeUpdate], task)
+				taskListCount++
 			}
 		}
 
@@ -167,11 +160,9 @@ func comparePosixGroups() error {
 
 				// create new task
 				task = new(actionTask)
-				task.dn = localPeople[dn].Objects[userIndex].dn
-				task.objectType = objectTypePosixAccount
-				task.taskType = taskTypeCreate
-				task.data = &localPeople[dn].Objects[userIndex]
-				taskList = append(taskList, task)
+				task.data = localPeople[dn].Objects[userIndex]
+				taskList[objectTypePosixAccount][taskTypeCreate] = append(taskList[objectTypePosixAccount][taskTypeCreate], task)
+				taskListCount++
 			}
 		}
 	}
@@ -184,10 +175,10 @@ func comparePosixGroups() error {
 			glg.Debugf("marked posixGroup for deletion %s", dn)
 
 			task = new(actionTask)
-			task.dn = dn
-			task.objectType = objectTypePosixGroup
-			task.taskType = taskTypeDelete
-			taskList = append(taskList, task)
+			task.dn = new(string)
+			*task.dn = dn
+			taskList[objectTypePosixGroup][taskTypeDelete] = append(taskList[objectTypePosixGroup][taskTypeDelete], task)
+			taskListCount++
 		}
 
 		for ldapUserIndex = range ldapPeople[dn].Objects {
@@ -202,11 +193,9 @@ func comparePosixGroups() error {
 				glg.Debugf("marked posixAccount for deletion %s", ldapPeople[dn].Objects[ldapUserIndex].dn)
 
 				task = new(actionTask)
-				task.dn = ldapPeople[dn].Objects[ldapUserIndex].dn
-				task.data = &ldapPeople[dn].Objects[ldapUserIndex]
-				task.objectType = objectTypePosixAccount
-				task.taskType = taskTypeDelete
-				taskList = append(taskList, task)
+				task.dn = &ldapPeople[dn].Objects[ldapUserIndex].dn
+				taskList[objectTypePosixAccount][taskTypeDelete] = append(taskList[objectTypePosixAccount][taskTypeDelete], task)
+				taskListCount++
 			}
 		}
 	}
@@ -219,7 +208,6 @@ func comparePosixGroups() error {
 // comparePosixAccount compares two posixAccount structs and create a new task to update the LDAP object to match local
 // local and remote must have the same UID as otherwise the comparison makes no sense
 // local must always be the config file user while remote is the read data from LDAP
-// GIDNumber & UIDNumber is not checked because it is always derived from LDAP
 func comparePosixAccount(local *posixAccount, remote *posixAccount) error {
 	var (
 		task *actionTask
@@ -295,15 +283,27 @@ func comparePosixAccount(local *posixAccount, remote *posixAccount) error {
 		userDiff.UserPassword = local.UserPassword
 	}
 
+	// UIDNumber can be nil in config
+	// in such case we can assume that the ldap UIDNumber should be used further (because generate_uid = true)
+	if local.UIDNumber != nil {
+		if *local.UIDNumber != *remote.UIDNumber {
+			mismatch = true
+			userDiff.UIDNumber = local.UIDNumber
+		}
+	}
+
+	if *local.GIDNumber != *remote.GIDNumber {
+		mismatch = true
+		userDiff.GIDNumber = local.GIDNumber
+	}
+
 	if mismatch {
 		glg.Debugf("marked posixAccount for update %s", local.dn)
 
 		task = new(actionTask)
-		task.dn = local.dn
-		task.objectType = objectTypePosixAccount
-		task.taskType = taskTypeUpdate
-		task.data = userDiff
-		taskList = append(taskList, task)
+		task.data = *userDiff
+		taskList[objectTypePosixAccount][taskTypeUpdate] = append(taskList[objectTypePosixAccount][taskTypeUpdate], task)
+		taskListCount++
 	}
 
 	return nil
@@ -312,14 +312,14 @@ func comparePosixAccount(local *posixAccount, remote *posixAccount) error {
 // compareGroupOfNames checks for differences between local and ldap groupOfNames
 func compareGroupOfNames() error {
 	var (
-		dn        string
-		ok        bool
-		index     int
-		ldapIndex int
-		match     bool
-		task      *actionTask
-		dn2       string
-		index2    int
+		dn              string
+		ok              bool
+		index           int
+		ldapIndex       int
+		match           bool
+		task            *actionTask
+		dn2             string
+		tmpGroupOfNames *groupOfNames
 	)
 
 	glg.Info("comparing groupOfNames")
@@ -332,26 +332,41 @@ func compareGroupOfNames() error {
 
 			// add task to create group
 			task = new(actionTask)
-			task.dn = dn
-			task.objectType = objectTypeGroupOfNames
-			task.taskType = taskTypeCreate
 			task.data = localGroups[dn]
-			taskList = append(taskList, task)
+			taskList[objectTypeGroupOfNames][taskTypeCreate] = append(taskList[objectTypeGroupOfNames][taskTypeCreate], task)
+			taskListCount++
+
+			// check for members to be created in this new group
+			for index = range localGroups[dn].Members {
+				task = new(actionTask)
+				task.dn = new(string)
+				*task.dn = dn
+
+				// get full user DN
+				task.data = getDNFromUsername(localGroups[dn].Members[index])
+				if task.data.(string) == "" {
+					glg.Errorf("unknown username for member %s", localGroups[dn].Members[index])
+					continue
+				}
+
+				taskList[objectTypeGroupOfNames][taskTypeAddMember] = append(taskList[objectTypeGroupOfNames][taskTypeAddMember], task)
+				taskListCount++
+			}
+			continue
 		}
 
-		// TODO: check for missing value
 		if ldapGroups[dn].Description != localGroups[dn].Description {
 			glg.Debugf("marked groupOfNames for update %s", dn)
 
 			// add task to update group
+			tmpGroupOfNames = new(groupOfNames)
+			tmpGroupOfNames.Description = localGroups[dn].Description
+			tmpGroupOfNames.dn = dn
+
 			task = new(actionTask)
-			task.dn = dn
-			task.objectType = objectTypeGroupOfNames
-			task.taskType = taskTypeUpdate
-			task.data = new(groupOfNames)
-			task.data.(*groupOfNames).Description = localGroups[dn].Description
-			task.data.(*groupOfNames).dn = dn
-			taskList = append(taskList, task)
+			task.data = *tmpGroupOfNames
+			taskList[objectTypeGroupOfNames][taskTypeUpdate] = append(taskList[objectTypeGroupOfNames][taskTypeUpdate], task)
+			taskListCount++
 		}
 
 		for index = range localGroups[dn].Members {
@@ -363,25 +378,20 @@ func compareGroupOfNames() error {
 			}
 
 			if !match {
-			out1:
-				// get user DN
-				for dn2 = range localPeople {
-					for index2 = range localPeople[dn2].Objects {
-						if *localPeople[dn2].Objects[index2].UID == localGroups[dn].Members[index] {
-							task = new(actionTask)
-							task.data = localPeople[dn2].Objects[index2].dn
-							// fast leaving of loops
-							break out1
-						}
-					}
+				task = new(actionTask)
+				// dn will change but task.dn should not
+				task.dn = new(string)
+				*task.dn = dn
+				task.data = getDNFromUsername(localGroups[dn].Members[index])
+
+				if task.data.(string) == "" {
+					glg.Errorf("unknown username for member %s", localGroups[dn].Members[index])
+					continue
 				}
 
-				glg.Debugf("marked member for creation %s", localPeople[dn2].Objects[index2].dn)
-
-				task.dn = dn
-				task.objectType = objectTypeGroupOfNames
-				task.taskType = taskTypeAddMember
-				taskList = append(taskList, task)
+				glg.Debugf("marked member for creation %s", task.data.(string))
+				taskList[objectTypeGroupOfNames][taskTypeAddMember] = append(taskList[objectTypeGroupOfNames][taskTypeAddMember], task)
+				taskListCount++
 			}
 		}
 	}
@@ -393,10 +403,11 @@ func compareGroupOfNames() error {
 			glg.Debugf("marked GroupOfNames for deletion %s", dn)
 
 			task = new(actionTask)
-			task.dn = dn
-			task.objectType = objectTypeGroupOfNames
-			task.taskType = taskTypeDelete
-			taskList = append(taskList, task)
+			// dn will change but task.dn should not
+			task.dn = new(string)
+			*task.dn = dn
+			taskList[objectTypeGroupOfNames][taskTypeDelete] = append(taskList[objectTypeGroupOfNames][taskTypeDelete], task)
+			taskListCount++
 			continue
 		}
 
@@ -423,6 +434,8 @@ func compareGroupOfNames() error {
 					for index = range ldapPeople[dn2].Objects {
 						if ldapGroups[dn].Members[ldapIndex] == *ldapPeople[dn2].Objects[index].UID {
 							task = new(actionTask)
+							task.dn = new(string)
+							*task.dn = dn
 							task.data = ldapPeople[dn2].Objects[index].dn
 							// fast leaving of loops
 							break out2
@@ -431,11 +444,8 @@ func compareGroupOfNames() error {
 				}
 
 				glg.Debugf("marked member for deletion %s", ldapPeople[dn2].Objects[index].dn)
-
-				task.dn = dn
-				task.objectType = objectTypeGroupOfNames
-				task.taskType = taskTypeDeleteMember
-				taskList = append(taskList, task)
+				taskList[objectTypeGroupOfNames][taskTypeDeleteMember] = append(taskList[objectTypeGroupOfNames][taskTypeDeleteMember], task)
+				taskListCount++
 			}
 		}
 	}
@@ -443,4 +453,154 @@ func compareGroupOfNames() error {
 	glg.Info("finished comparing groupOfNames")
 
 	return nil
+}
+
+// compareSudoRoles checks for differences between local and ldap sudoRoles
+func compareSudoRoles() error {
+	var (
+		i     int
+		j     int
+		match bool
+		task  *actionTask
+	)
+
+	glg.Info("comparing sudoGroups")
+
+	// sort both slices before comparing them
+	// sorting is done by length of DN to make sure parent DNs (which are shorter, duh) come before children
+	sort.Slice(localSudoRoles, func(i, j int) bool {
+		return len(localSudoRoles[i].dn) < len(localSudoRoles[j].dn)
+	})
+
+	sort.Slice(ldapSudoRoles, func(i, j int) bool {
+		return len(ldapSudoRoles[i].dn) < len(ldapSudoRoles[j].dn)
+	})
+
+	// first checking for roles missing on LDAP
+	for i = range localSudoRoles {
+		match = false
+		for j = range ldapSudoRoles {
+
+			if localSudoRoles[i].dn == ldapSudoRoles[j].dn {
+				// check for differences between both objects
+				compareSudoRole(localSudoRoles[i], ldapSudoRoles[j])
+
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			glg.Debugf("marked sudoRole for creation %s", localSudoRoles[i].dn)
+			task = new(actionTask)
+			task.data = localSudoRoles[i]
+			taskList[objectTypeSudoRole][taskTypeCreate] = append(taskList[objectTypeSudoRole][taskTypeCreate], task)
+			taskListCount++
+		}
+	}
+
+	// next check for roles existing extra in LDAP and mark them for deletion
+	for i = range ldapSudoRoles {
+		match = false
+		for j = range localSudoRoles {
+
+			if ldapSudoRoles[i].dn == localSudoRoles[j].dn {
+				match = true
+				break
+			}
+		}
+
+		if !match {
+			glg.Debugf("marked sudoRole for deletion %s", ldapSudoRoles[i].dn)
+			task = new(actionTask)
+			task.dn = &ldapSudoRoles[i].dn
+			taskList[objectTypeSudoRole][taskTypeDelete] = append(taskList[objectTypeSudoRole][taskTypeDelete], task)
+			taskListCount++
+		}
+	}
+
+	glg.Info("finished comparing sudoGroups")
+	return nil
+}
+
+// compareSudoRole checks two sudoRole objects for differences
+func compareSudoRole(local sudoRole, remote sudoRole) {
+	var (
+		task     actionTask
+		mismatch bool
+	)
+
+	// sort all slices
+	sort.Strings(local.SudoUser)
+	sort.Strings(local.SudoHost)
+	sort.Strings(local.SudoCommand)
+	sort.Strings(local.SudoOption)
+	sort.Strings(local.SudoRunAsUser)
+	sort.Strings(local.SudoRunAsGroup)
+	sort.Strings(local.SudoNotBefore)
+	sort.Strings(local.SudoNotAfter)
+	sort.Strings(remote.SudoUser)
+	sort.Strings(remote.SudoHost)
+	sort.Strings(remote.SudoCommand)
+	sort.Strings(remote.SudoOption)
+	sort.Strings(remote.SudoRunAsUser)
+	sort.Strings(remote.SudoRunAsGroup)
+	sort.Strings(remote.SudoNotBefore)
+	sort.Strings(remote.SudoNotAfter)
+
+	// Things here are different than with other objects as here values can be deleted in config that also need to be
+	// deleted on target. Thererfore, when a diff is detected, the local version gets added as task data which in turn
+	// allows ldapUpdateSudoRole to replace or delete attributes
+
+	if local.Description != remote.Description ||
+		!reflect.DeepEqual(local.SudoUser, remote.SudoUser) ||
+		!reflect.DeepEqual(local.SudoHost, remote.SudoHost) ||
+		!reflect.DeepEqual(local.SudoCommand, remote.SudoCommand) ||
+		!reflect.DeepEqual(local.SudoOption, remote.SudoOption) ||
+		!reflect.DeepEqual(local.SudoRunAsUser, remote.SudoRunAsUser) ||
+		!reflect.DeepEqual(local.SudoRunAsGroup, remote.SudoRunAsGroup) ||
+		!reflect.DeepEqual(local.SudoNotBefore, remote.SudoNotBefore) ||
+		!reflect.DeepEqual(local.SudoNotAfter, remote.SudoNotAfter) {
+		mismatch = true
+	}
+
+	// sudoOrder is a ptr so we need to check first if it is not nill
+	if local.SudoOrder != nil && remote.SudoOrder != nil {
+		if *local.SudoOrder != *remote.SudoOrder {
+			mismatch = true
+		}
+	} else {
+		// if one of those is nil, there is a change
+		if !(local.SudoOrder == nil && remote.SudoOrder == nil) {
+			mismatch = true
+		}
+	}
+
+	if mismatch {
+		// create update task
+		task.data = local
+		taskList[objectTypeSudoRole][taskTypeUpdate] = append(taskList[objectTypeSudoRole][taskTypeUpdate], &task)
+		taskListCount++
+
+		glg.Debugf("marked sudoRole for update %s", local.dn)
+	}
+}
+
+// getDNFromUsername returns the full DN of a user object identified by its username
+func getDNFromUsername(uid string) string {
+	var (
+		pgDN string
+		i    int
+		dn   string
+	)
+
+	for pgDN = range localPeople {
+		for i = range localPeople[pgDN].Objects {
+			if *localPeople[pgDN].Objects[i].UID == uid {
+				return localPeople[pgDN].Objects[i].dn
+			}
+		}
+	}
+
+	return dn
 }

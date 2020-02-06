@@ -13,7 +13,9 @@ group_rdn: ou=groups
 
 generate_uid: true
 min_uid: 1000
-max_uid: 1500
+max_uid: 150000
+
+enable_sudo: true
 
 defaults:
   mail: "%g.%l@my-domain.com"
@@ -21,3 +23,8 @@ defaults:
   display_name: "%g %l"
   home_dir: /tmp/
   login_shell: /bin/sh
+
+  sudo:
+    description: default SUDOer role for all groups
+    # passwordless sudo
+    sudo_option: "!authenticate"

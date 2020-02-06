@@ -109,6 +109,7 @@ func readConfiguration(c *cli.Context) error {
 	glg.Debugf("                root_dn: %s", *config.RootDN)
 	glg.Debugf("             people_rdn: %s", *config.PeopleRDN)
 	glg.Debugf("              group_rdn: %s", *config.GroupRDN)
+	glg.Debugf("            enable_sudo: %t", config.EnableSudo)
 	glg.Debugf("           generate_uid: %t", config.GenerateUID)
 
 	if config.GenerateUID {
@@ -144,14 +145,45 @@ func readConfiguration(c *cli.Context) error {
 		glg.Debugf("(default) user_password: %s", *config.Defaults.UserPassword)
 	}
 
+	// sudo defaults
+	if config.Defaults.Sudo != nil {
+		// always overwrite CN
+		config.Defaults.Sudo.CN = "Defaults"
+
+	}
+
 	glg.Infof("done reading main configuration file")
 
 	// init maps
-	localPeople = make(map[string]posixGroup)
-	localGroups = make(map[string]groupOfNames)
+	// taskList is split into multiple maps to systematically structure the tasks (which gets rid of a lot of loops
+	// further down the line). The first map is for each objectType, the second for the actions for such objectType.
+	// To not constantly check if every key is initialized the whole map is run through make(). Checks then only require
+	// to look for map length.
+	taskList[objectTypePosixAccount] = make(map[int][]*actionTask)
+	taskList[objectTypePosixAccount][taskTypeCreate] = make([]*actionTask, 0, 0)
+	taskList[objectTypePosixAccount][taskTypeUpdate] = make([]*actionTask, 0, 0)
+	taskList[objectTypePosixAccount][taskTypeDelete] = make([]*actionTask, 0, 0)
 
-	ldapPeople = make(map[string]posixGroup)
-	ldapGroups = make(map[string]groupOfNames)
+	taskList[objectTypePosixGroup] = make(map[int][]*actionTask)
+	taskList[objectTypePosixGroup][taskTypeCreate] = make([]*actionTask, 0, 0)
+	taskList[objectTypePosixGroup][taskTypeUpdate] = make([]*actionTask, 0, 0)
+	taskList[objectTypePosixGroup][taskTypeDelete] = make([]*actionTask, 0, 0)
+
+	taskList[objectTypeGroupOfNames] = make(map[int][]*actionTask)
+	taskList[objectTypeGroupOfNames][taskTypeCreate] = make([]*actionTask, 0, 0)
+	taskList[objectTypeGroupOfNames][taskTypeUpdate] = make([]*actionTask, 0, 0)
+	taskList[objectTypeGroupOfNames][taskTypeDelete] = make([]*actionTask, 0, 0)
+	taskList[objectTypeGroupOfNames][taskTypeAddMember] = make([]*actionTask, 0, 0)
+	taskList[objectTypeGroupOfNames][taskTypeDeleteMember] = make([]*actionTask, 0, 0)
+
+	taskList[objectTypeOrganisationalUnit] = make(map[int][]*actionTask)
+	taskList[objectTypeOrganisationalUnit][taskTypeCreate] = make([]*actionTask, 0, 0)
+	taskList[objectTypeOrganisationalUnit][taskTypeDelete] = make([]*actionTask, 0, 0)
+
+	taskList[objectTypeSudoRole] = make(map[int][]*actionTask)
+	taskList[objectTypeSudoRole][taskTypeCreate] = make([]*actionTask, 0, 0)
+	taskList[objectTypeSudoRole][taskTypeUpdate] = make([]*actionTask, 0, 0)
+	taskList[objectTypeSudoRole][taskTypeDelete] = make([]*actionTask, 0, 0)
 
 	return nil
 }
@@ -447,6 +479,20 @@ func readGroupConfiguration() error {
 	}
 
 	for _, currentFile = range files {
+
+		if filepath.Base(currentFile) == "SUDOers" {
+
+			// only check SUDOers files when feature is enabled
+			if config.EnableSudo {
+				err = readSUDOersFile(currentFile)
+				if err != nil {
+					glg.Errorf("failed to load SUDOers file: %s", err.Error())
+				}
+			}
+
+			continue
+		}
+
 		glg.Infof("reading group config file %s", currentFile)
 
 		yamlFile, err = ioutil.ReadFile(currentFile)
@@ -535,4 +581,84 @@ func generateOUDN(pieces []string) string {
 	default:
 		return fmt.Sprintf("%s,ou=%s", generateOUDN(pieces[1:]), pieces[0])
 	}
+}
+
+// readSUDOersFile reads a SUDOers file and validates its contents
+func readSUDOersFile(file string) error {
+	var (
+		yamlFile   []byte
+		err        error
+		tmpSudoers sudoers
+		relPath    string
+		pathPieces []string
+		dn         string
+		i          int
+		ou         organizationalUnit
+		tmpRole    sudoRole
+	)
+
+	glg.Infof("reading SUDOers file %s", file)
+
+	yamlFile, err = ioutil.ReadFile(file)
+	if err != nil {
+		return err
+	}
+
+	err = yaml.Unmarshal(yamlFile, &tmpSudoers)
+	if err != nil {
+		return fmt.Errorf("failed to parse config file: %s", err.Error())
+	}
+
+	// if there are no roles set, skip this file
+	if len(tmpSudoers.Roles) == 0 {
+		glg.Debugf("skipped SUDOers file without roles")
+		return nil
+	}
+
+	// generate DN
+	relPath, _ = filepath.Rel(*config.GroupDir, file)
+	pathPieces = strings.Split(relPath, "/")
+	if len(pathPieces) <= 1 {
+		dn = fmt.Sprintf("ou=SUDOers,%s", groupDN)
+	} else {
+		dn = fmt.Sprintf("ou=SUDOers,%s,%s", generateOUDN(pathPieces[:len(pathPieces)-1]), groupDN)
+	}
+
+	// generate OU entry
+	ou.dn = dn
+	ou.cn = "SUDOers"
+	ou.description = "Managed by Monban"
+	localOUs = append(localOUs, &ou)
+	glg.Debugf("found intermediate OU %s", ou.dn)
+
+	if tmpSudoers.DisableDefaults {
+		glg.Debugf("defaults disabled for SUDOers file %s", file)
+	} else {
+		// adding default rule
+		if config.Defaults.Sudo != nil {
+			tmpRole = *config.Defaults.Sudo
+			tmpRole.dn = fmt.Sprintf("cn=Defaults,%s", dn)
+			localSudoRoles = append(localSudoRoles, tmpRole)
+
+			glg.Debugf("loaded default SUDOers role %s", tmpRole.dn)
+		}
+	}
+
+	for i = range tmpSudoers.Roles {
+
+		if tmpSudoers.Roles[i].CN == "" {
+			return fmt.Errorf("mandatory name attribute is missing")
+		}
+
+		if tmpSudoers.Roles[i].Description == "" {
+			tmpSudoers.Roles[i].Description = "Managed by Monban"
+		}
+
+		tmpSudoers.Roles[i].dn = fmt.Sprintf("cn=%s,%s", tmpSudoers.Roles[i].CN, dn)
+		localSudoRoles = append(localSudoRoles, tmpSudoers.Roles[i])
+
+		glg.Debugf("loaded sudoRole with DN %s", tmpSudoers.Roles[i].dn)
+	}
+
+	return nil
 }

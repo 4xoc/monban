@@ -1,0 +1,12 @@
+cn: qa
+gid_number: 1002
+description: This is for QA Engineers
+
+objects:
+  - username: alicesmith
+    given_name: Alice
+    surname: Smith
+
+  - username: bobbuilder
+    given_name: Bob
+    surname: Builder
