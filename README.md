@@ -165,12 +165,53 @@ individual attributes with single values on the LDAP target system. Monban **doe
 roles defined but only verifies that required values are set. Have a look at [this page](https://www.sudo.ws/man/1.8.13/sudoers.ldap.man.html)
 for details about the sudoRole object.
 
+| Attribute | Mandatory | Description |
+|-----------|-----------|-------------|
+| disable_defaults | no | Controls whether cn=Defaults will be created. |
+| roles | yes | List of role objects (see next table). |
+
+Attributes for roles:  
+Except `name`, `description` & `sudo_order` all attributes can be defined more than once. The usual YAML array format applies while
+single values can also be defined like a singe string.
+
+| Attribute | Mandatory | Description |
+|-----------|-----------|-------------|
+| name | yes | Name of the role (also cn) |
+| sudo_command | yes | Commands the rule applies to. |
+| sudo_user | yes | User (or group) the rule applies to. |
+| description | no | Description of the rule. |
+| sudo_host | yes | Hosts the rule applies to. |
+| sudo_option | no | Options for the rule. |
+| sudo_run_as_user | no | Limit of user to run command as. |
+| sudo_run_as_group | no | Limit of group to run command as. |
+| sudo_not_before | no | Time before rule doesn't apply. |
+| sudo_not_after | no | Time after rule doesn't apply anymore. |
+| sudo_order | no | Order of the rule compared to others. |
+
+
+**Example:**
+```
+disable_defaults: false
+
+roles:
+# allow all commands for groups QA and DevOps
+ - name: allow-all
+   sudo_command: ALL
+   sudo_user:
+     - "%devops"
+     - "%qa"
+
+# allows some commands for user alicesmith
+ - name: allow-some
+   sudo_command:
+     - /bin/ls
+     - /bin/bla
+   sudo_user:
+     - "alicesmith"
+```
 
 ## Templating
-
-Templating allows for dynamic attribute generation of people objects. Attributes that follow a common pattern like mail
-or Display Name don't have to be specified in every individual object definition but as defaults with a custom pattern.
-Values based of templates are always the last one to be generated. Whenever an object has a defined value for an
+Templating allows for dynamic attribute generation of people objects. Attributes that follow a common pattern like mail or Display Name don't have to be specified in every individual object definition but as defaults with a custom pattern.  Values based of templates are always the last one to be generated. Whenever an object has a defined value for an
 attribute it will take precendence of any default that might exist. This allows for special cases where a template
 might not work to be supported too. All template variabled are object-specific meaning that it is not possible to get
 a value from any other object than what the default is for. I.e. you cannot use the attribute of a different object.
