@@ -1,13 +1,15 @@
-# Monban main configuration file
+# Monban main configuration file example
+# You can use this directly out pf the box as it is
+# to try out monban on a pristine osixia/openldap container
 
 host_uri: ldap://localhost:389
-user_dn: "cn=root,dc=my-domain,dc=com"
-user_password: secret
+user_dn: "cn=admin,dc=example,dc=org"
+user_password: admin
 enable_ssh_public_keys: true
 group_dir: groups
 people_dir: people
 
-root_dn: dc=my-domain,dc=com
+root_dn: dc=example,dc=org
 people_rdn: ou=people
 group_rdn: ou=groups
 
@@ -18,7 +20,7 @@ max_uid: 150000
 enable_sudo: true
 
 defaults:
-  mail: "%g.%l@my-domain.com"
+  mail: "%g.%l@example.org"
   user_password: "{SASL}%u"
   display_name: "%g %l"
   home_dir: /tmp/
