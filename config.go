@@ -194,7 +194,6 @@ func readPeopleConfiguration() error {
 		err           error
 		files         []string
 		currentFile   string
-		dn            string
 		yamlFile      []byte
 		currentPeople *posixGroup
 		userIndex     int
@@ -287,8 +286,8 @@ func readPeopleConfiguration() error {
 			glg.Fatalf("gid_number missing in '%s'", currentFile)
 		}
 
-		if _, ok = localPeople[dn]; ok {
-			return fmt.Errorf("dn %s already exists but was declared again in %s", dn, currentFile)
+		if _, ok = localPeople[currentPeople.dn]; ok {
+			return fmt.Errorf("dn %s already exists but was declared again in %s", currentPeople.dn, currentFile)
 		}
 
 		// set dummy description
