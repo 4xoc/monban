@@ -244,9 +244,16 @@ defaults:
 ## Compiling
 
 To compile the source into a binary just run `make` in the directory. Golang must be installed. The Makefile creates
-binaries for multiple platforms (Linux, FreeBSD, Darwin (MacOS)). All binaries are linked staticly and can be
+binaries for multiple platforms (Linux, FreeBSD, Darwin (MacOS)). All binaries are linked statically and can be
 copied and used without dependencies. To build for more platforms check out Golang's means of cross-compiling.
 
+## Trying it out
+
+You can use osixia/openldap docker container to try out Monban the following way. Assuming you are in the monban checkout directory
+
+- `docker run -p 389:389 -p 636:636 --name my-openldap-container --detach osixia/openldap:1.3.0`
+- `docker cp examples/sudo.schema.ldif my-openldap-container:/tmp/`
+- `docker exec my-openldap-container ldapmodify -x -H ldap://localhost -w config -D "cn=admin,cn=config" -a -f /tmp/sudo.schema.ldif`
 ## Dependencies
 
 Monban uses the following dependencies and other open source libraries. Thanks for providing them!!

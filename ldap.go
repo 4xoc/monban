@@ -212,7 +212,7 @@ func ldapLoadGroups() error {
 	if err != nil {
 		// check if error is only group being missing
 		if ldap.IsErrorWithCode(err, ldap.LDAPResultNoSuchObject) {
-			return fmt.Errorf("people_rdn doesn't seem to exist: %s", err.Error())
+			return fmt.Errorf("group_rdn doesn't seem to exist: %s", err.Error())
 		}
 		return err
 	}

@@ -1,5 +1,5 @@
 # Monban main configuration file example
-# You can use this directly out pf the box as it is
+# You can use this directly out of the box
 # to try out monban on a pristine osixia/openldap container
 
 host_uri: ldap://localhost:389
