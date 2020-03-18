@@ -255,6 +255,7 @@ You can use osixia/openldap docker container to try out Monban the following way
 - `docker cp examples/sudo.schema.ldif my-openldap-container:/tmp/`
 - `docker exec my-openldap-container ldapmodify -x -H ldap://localhost -w config -D "cn=admin,cn=config" -a -f /tmp/sudo.schema.ldif`
 - `./monban -c examples/main-config.yml -l debug b`
+- `./monban -c examples/main-config.yml -l debug s`
 
 ## Dependencies
 
