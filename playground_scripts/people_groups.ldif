@@ -1,0 +1,9 @@
+dn: ou=people,dc=example,dc=org
+objectClass: top
+objectClass: organizationalUnit
+description: The people of example.org
+
+dn: ou=groups,dc=example,dc=org
+objectClass: top
+objectClass: organizationalUnit
+description: The groups within example.org

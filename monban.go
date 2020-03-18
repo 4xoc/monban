@@ -320,37 +320,6 @@ func main() {
 					return nil
 				},
 			},
-			&cli.Command{
-				Name:    "bootstrap",
-				Aliases: []string{"b"},
-				Usage:   "bootstraps an empty LDAP server",
-				Action: func(c *cli.Context) error {
-					var err error
-
-					if err = initConfig(c); err != nil {
-						return err
-					}
-
-					ldapCon, err = ldapConnect()
-					if err != nil {
-						return fmt.Errorf("failed to connect to LDAP host: %w", err)
-					}
-
-					ldapCreateOrganisationalUnit(&organizationalUnit{
-						dn:          peopleDN,
-						cn:          "people",
-						description: "All people in organization",
-					})
-
-					ldapCreateOrganisationalUnit(&organizationalUnit{
-						dn:          groupDN,
-						cn:          "people",
-						description: "All people in organization",
-					})
-
-					return nil
-				},
-			},
 		},
 	}
 
