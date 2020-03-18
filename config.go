@@ -425,6 +425,7 @@ func readGroupConfiguration() error {
 		i            int
 		j            int
 		match        int
+		dn           string
 		pathPieces   []string
 		relPath      string
 	)
@@ -546,7 +547,7 @@ func readGroupConfiguration() error {
 		// verify members also exist within config
 		for i = range currentGroup.Members {
 			match = 0
-			for dn := range localPeople {
+			for dn = range localPeople {
 				for j = range localPeople[dn].Objects {
 
 					if currentGroup.Members[i] == *localPeople[dn].Objects[j].UID {
