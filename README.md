@@ -249,13 +249,11 @@ copied and used without dependencies. To build for more platforms check out Gola
 
 ## Trying it out
 
-You can use osixia/openldap docker container to try out Monban the following way. Assuming you are in the monban checkout directory
+You can use osixia/openldap docker container to try out Monban the following way. Assuming you are in the monban checkout directory and you have docker:
 
-- `docker run -p 389:389 -p 636:636 --name my-openldap-container --detach osixia/openldap:1.3.0`
-- `docker cp examples/sudo.schema.ldif my-openldap-container:/tmp/`
-- `docker exec my-openldap-container ldapmodify -x -H ldap://localhost -w config -D "cn=admin,cn=config" -a -f /tmp/sudo.schema.ldif`
-- `./monban -c examples/main-config.yml -l debug b`
-- `./monban -c examples/main-config.yml -l debug s`
+- `make playground`
+- `./monban -c examples/main-config.yml -l debug diff`
+- `./monban -c examples/main-config.yml -l debug sync`
 
 ## Dependencies
 
