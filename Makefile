@@ -26,3 +26,9 @@ clean:
 	rm -f monban-* || true
 	rm -f monban || true
 	rm -f sha256sums.txt || true
+
+playground:
+	bash playground_scripts/create_playground.sh
+
+playground-clean:
+	docker rm -f my-openldap-container

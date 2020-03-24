@@ -6,6 +6,7 @@ objects:
   - username: alicesmith
     given_name: Alice
     surname: Smith
+    mail: alice.kathrin.smith@qa.example.org
 
   - username: bobbuilder
     given_name: Bob

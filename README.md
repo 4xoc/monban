@@ -2,23 +2,23 @@
 
 Monban provides a way to synchronize any ldap-compliant system with configurations defined in YAML files to create 
 user objects as well as manage their group memberships. While it is very flexible to accommodate (hopefully) any
-usecase it also allows for minimal configuration using default values that support templating to generate object
+use case it also allows for minimal configuration using default values that support templating to generate object
 attributes.
 
-This tool is supposed to be a very easy and yet powerfull way to create user objects (you need a working ldap, duh)
+This tool is supposed to be a very easy and yet powerful way to create user objects (you need a working ldap, duh)
 and add them to the groups as per configuration file. Monban also detects drifts between config and ldap and will sync
 ldap to be identical to what is stated in the files. This includes adding new objects (users or groups) as well as
 deleting objects where required.
 
-Monban maintains two kinds of groups: PosixGroup and generic OrganisationalUnit. While the first ist used for SSH based
+Monban maintains two kinds of groups: `PosixGroup` and generic `OrganizationalUnit`. While the first ist used for SSH based
 logins, the latter is more common for services that map service-specific roles or groups to members of the OU.
 
-Since Monban considers the configuration files as the single source of truth, it will take actions to create, modify and delete ojects within the sub-trees defined (see configuration below). To prevent unexpected behaviour, it is highly recommended to not mix Mondan managed sub-trees and other, manually or otherwise manages objects. In short, give Monban it's own sub-tree to work in. This will also prevent Monban from deleteing objects used by something else.
+Since Monban considers the configuration files as the single source of truth, it will take actions to create, modify and delete objects within the sub-trees defined (see configuration below). To prevent unexpected behavior, it is highly recommended to not mix Monban managed sub-trees and other, manually or otherwise manages objects. In short, give Monban it's own sub-tree to work in. This will also prevent Monban from deleting objects used by something else.
 
 ## Requirements
 
 * working LDAP system
-* nis schema
+* [nis schema](https://tools.ietf.org/html/rfc2307)
 * (optional, but recommended) [sudo schema](resources/sudo.schema) for SUDOers roles
 * (optional, but recommended) [ssh schema](resources/ssh.schema) for SSH public keys
 
@@ -47,8 +47,8 @@ files are written in YAML. Check out the [examples](examples/) to get started.
 
 #### General Config
 
-The general configuration file defined overall details that Monban need to run. It is also the entrypoint for Monban
-to then find all other configuration files thay might exist.
+The general configuration file defined overall details that Monban need to run. It is also the entry point for Monban
+to then find all other configuration files that might exist.
 
 | Attribute | Mandatory | Description |
 |-----------|-----------|-------------|
@@ -244,8 +244,16 @@ defaults:
 ## Compiling
 
 To compile the source into a binary just run `make` in the directory. Golang must be installed. The Makefile creates
-binaries for multiple platforms (Linux, FreeBSD, Darwin (MacOS)). All binaries are linked staticly and can be
+binaries for multiple platforms (Linux, FreeBSD, Darwin (MacOS)). All binaries are linked statically and can be
 copied and used without dependencies. To build for more platforms check out Golang's means of cross-compiling.
+
+## Trying it out
+
+You can use osixia/openldap docker container to try out Monban the following way. Assuming you are in the monban checkout directory and you have docker:
+
+- `make playground`
+- `./monban -c examples/main-config.yml -l debug diff`
+- `./monban -c examples/main-config.yml -l debug sync`
 
 ## Dependencies
 

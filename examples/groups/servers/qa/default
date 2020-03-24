@@ -1,6 +1,7 @@
 cn: default
-description: Default host in prod.
+description: Default host in qa.
 
 members:
   - johndoe
-  - peterpan
+  - alicesmith
+  - bobbuilder
