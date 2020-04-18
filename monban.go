@@ -3,76 +3,38 @@ package main
 import (
 	"fmt"
 	"os"
-
-	//	"sort"
 	"time"
 
-	"github.com/go-ldap/ldap/v3"
+	"github.com/4xoc/monban/models"
+
 	"github.com/kpango/glg"
 	"github.com/urfave/cli/v2"
 )
 
-const (
-	objectTypePosixAccount = iota
-	objectTypePosixGroup
-	objectTypeGroupOfNames
-	objectTypeOrganisationalUnit
-	objectTypeSudoRole
-)
-
-const (
-	taskTypeCreate = iota
-	taskTypeUpdate
-	taskTypeDelete
-	taskTypeAddMember
-	taskTypeDeleteMember
-)
-
 // global vars
 var (
-	// logLevel holds a string describing a desired log level
-	logLevel string
-	// colo defines if diff output is colorful or not
-	useColor bool
-	// config points to the main config struct
-	config *configuration
-	// configFile contains the main config file path
-	configFile string
-	// basePath is the absolut path to the monban root dir
-	basePath string
-	// userdn contains the user dn to use for binding to LDAP
-	userDN string
-	// userPassword contains the user password to use for binding to LDAP
-	userPassword string
+	rt models.Runtime
 	// localPeople holds a map of all users and their organisational parent group
-	localPeople map[string]posixGroup = make(map[string]posixGroup)
+	localPeople map[string]models.PosixGroup = make(map[string]models.PosixGroup)
 	// ldapPeople holds a map of all users and their organisational parent group existing in LDAP
-	ldapPeople map[string]posixGroup = make(map[string]posixGroup)
+	ldapPeople map[string]models.PosixGroup = make(map[string]models.PosixGroup)
 	// localGroups holds a map of all unixGroups and their members
-	localGroups map[string]groupOfNames = make(map[string]groupOfNames)
+	localGroups map[string]models.GroupOfNames = make(map[string]models.GroupOfNames)
 	// ldapGroups holds a map of all groups and their members existing in LDAP
-	ldapGroups map[string]groupOfNames = make(map[string]groupOfNames)
-	// global LDAP connection struct
-	ldapCon *ldap.Conn
-	// global highest UIDNumber seen below peopleDN
-	latestUID int
-	// peopledn is the root dn in which people groups exist in
-	peopleDN string
-	// groupdn is the root dn in wich groups exist in
-	groupDN string
+	ldapGroups map[string]models.GroupOfNames = make(map[string]models.GroupOfNames)
 	// taskList contains all tasks to be executed in order to sync LDAP with configured values
 	// it is mapped by object type and action
-	taskList map[int]map[int][]*actionTask = make(map[int]map[int][]*actionTask)
+	taskList map[int]map[int][]*models.ActionTask = make(map[int]map[int][]*models.ActionTask)
 	// taskListCount contains the number of planned changes to be synced
 	taskListCount int
 	// localOUs holds all locally found OUs
-	localOUs []*organizationalUnit
+	localOUs []*models.OrganizationalUnit
 	// ldapOUs holds all existing OUs on target
-	ldapOUs []*organizationalUnit
+	ldapOUs []*models.OrganizationalUnit
 	// localSUDOers contains a map of ou=SUDOers DN and it's set of roles configured in file
-	localSudoRoles []sudoRole
+	localSudoRoles []models.SudoRole
 	// ldapSUDOers contains a map of ou=SUDOers DN and it's set of roles on LDAP target
-	ldapSudoRoles []sudoRole
+	ldapSudoRoles []models.SudoRole
 
 	// filled at build time
 	Version string
@@ -107,7 +69,7 @@ func main() {
 				Value:       "warning",
 				Usage:       "set log level [debug|info|warning|error] (default: warning)",
 				EnvVars:     []string{"MONBAN_LOG_LEVEL"},
-				Destination: &logLevel,
+				Destination: &rt.LogLevel,
 			},
 			&cli.StringFlag{
 				Name:        "config",
@@ -115,26 +77,26 @@ func main() {
 				Value:       "config.yml",
 				Usage:       "read main configuration from `FILE`",
 				EnvVars:     []string{"MONBAN_CONFIG_FILE"},
-				Destination: &configFile,
+				Destination: &rt.ConfigFile,
 			},
 			&cli.StringFlag{
 				Name:        "user_dn",
 				Aliases:     []string{"u"},
 				Usage:       "user dn to bind to",
 				EnvVars:     []string{"MONBAN_USER_DN"},
-				Destination: &userDN,
+				Destination: &rt.UserDN,
 			},
 			&cli.StringFlag{
 				Name:        "user_pass",
 				Aliases:     []string{"p"},
 				Usage:       "user passwort to bind with",
 				EnvVars:     []string{"MONBAN_USER_PASSWORD"},
-				Destination: &userPassword,
+				Destination: &rt.UserPassword,
 			},
 		},
 		Before: func(c *cli.Context) error {
 			// set log level
-			switch logLevel {
+			switch rt.LogLevel {
 			case "debug":
 				glg.Get().
 					SetMode(glg.STD).
@@ -181,7 +143,7 @@ func main() {
 					SetLevelMode(glg.ERR, glg.STD).
 					SetLevelMode(glg.FATAL, glg.STD)
 
-				glg.Warnf("unknown log-level %s, using warning instead", logLevel)
+				glg.Warnf("unknown log-level %s, using warning instead", rt.LogLevel)
 			}
 
 			return nil
@@ -239,7 +201,7 @@ func main() {
 						Usage:       "when true output is displayed with colors",
 						EnvVars:     []string{"MONBAN_DIFF_COLORS"},
 						Value:       false,
-						Destination: &useColor,
+						Destination: &rt.UseColor,
 					},
 				},
 				Action: func(c *cli.Context) error {
@@ -355,7 +317,7 @@ func initConfig(c *cli.Context) error {
 func initLDAP() error {
 	var err error
 
-	ldapCon, err = ldapConnect()
+	rt.LdapCon, err = ldapConnect()
 	if err != nil {
 		return fmt.Errorf("failed to connect to LDAP host: %s", err.Error())
 	}

@@ -6,6 +6,8 @@ import (
 	"sort"
 	"text/tabwriter"
 
+	"github.com/4xoc/monban/models"
+
 	"github.com/fatih/color"
 )
 
@@ -18,7 +20,7 @@ var (
 // prettyPrint wraps the whole human readable printing of diffs within the task list
 func prettyPrint() {
 	// init colors
-	if useColor {
+	if rt.UseColor {
 		green = color.New(color.FgGreen).PrintfFunc()
 		yellow = color.New(color.FgYellow).PrintfFunc()
 		red = color.New(color.FgRed).PrintfFunc()
@@ -28,7 +30,7 @@ func prettyPrint() {
 		red = color.New().PrintfFunc()
 	}
 
-	// organizationalUnit
+	// models.OrganizationalUnit
 	prettyPrintOUs()
 
 	// unixGroup
@@ -37,7 +39,7 @@ func prettyPrint() {
 	// unixAccount
 	prettyPrintPosixAccounts()
 
-	// groupOfNames
+	// models.GroupOfNames
 	prettyPrintGroupOfNames()
 
 	// SUDOer roles
@@ -52,22 +54,22 @@ func prettyPrintOUs() {
 
 	fmt.Printf("\n==> OrganizationalUnits <==\n")
 
-	if len(taskList[objectTypeOrganisationalUnit][taskTypeCreate]) > 0 {
-		for i = range taskList[objectTypeOrganisationalUnit][taskTypeCreate] {
+	if len(taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeCreate]) > 0 {
+		for i = range taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeCreate] {
 			green("++ dn: %s\n",
-				taskList[objectTypeOrganisationalUnit][taskTypeCreate][i].data.(*organizationalUnit).dn)
+				taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeCreate][i].Data.(*models.OrganizationalUnit).DN)
 		}
 	}
 
-	if len(taskList[objectTypeOrganisationalUnit][taskTypeDelete]) > 0 {
+	if len(taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeDelete]) > 0 {
 		fmt.Println()
-		for i = range taskList[objectTypeOrganisationalUnit][taskTypeDelete] {
-			red("-- dn: %s\n", *taskList[objectTypeOrganisationalUnit][taskTypeDelete][i].dn)
+		for i = range taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeDelete] {
+			red("-- dn: %s\n", *taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeDelete][i].DN)
 		}
 	}
 }
 
-// prettyPrintPosixGroups displays posixGroup changes in a pretty way
+// prettyPrintPosixGroups displays models.PosixGroup changes in a pretty way
 func prettyPrintPosixGroups() {
 	var (
 		i int
@@ -75,41 +77,41 @@ func prettyPrintPosixGroups() {
 
 	fmt.Printf("\n==> PosixGroups <==")
 
-	if len(taskList[objectTypePosixGroup][taskTypeCreate]) > 0 {
-		for i = range taskList[objectTypePosixGroup][taskTypeCreate] {
+	if len(taskList[models.ObjectTypePosixGroup][models.TaskTypeCreate]) > 0 {
+		for i = range taskList[models.ObjectTypePosixGroup][models.TaskTypeCreate] {
 			green("\n++ dn:          %s\n   name:        %s\n   gid_number:  %d\n   description: %s\n",
-				taskList[objectTypePosixGroup][taskTypeCreate][i].data.(posixGroup).dn,
-				taskList[objectTypePosixGroup][taskTypeCreate][i].data.(posixGroup).CN,
-				*taskList[objectTypePosixGroup][taskTypeCreate][i].data.(posixGroup).GIDNumber,
-				taskList[objectTypePosixGroup][taskTypeCreate][i].data.(posixGroup).Description)
+				taskList[models.ObjectTypePosixGroup][models.TaskTypeCreate][i].Data.(models.PosixGroup).DN,
+				taskList[models.ObjectTypePosixGroup][models.TaskTypeCreate][i].Data.(models.PosixGroup).CN,
+				*taskList[models.ObjectTypePosixGroup][models.TaskTypeCreate][i].Data.(models.PosixGroup).GIDNumber,
+				taskList[models.ObjectTypePosixGroup][models.TaskTypeCreate][i].Data.(models.PosixGroup).Description)
 		}
 	}
 
-	if len(taskList[objectTypePosixGroup][taskTypeUpdate]) > 0 {
-		for i = range taskList[objectTypePosixGroup][taskTypeUpdate] {
-			yellow("\n~~ dn:          %s\n", taskList[objectTypePosixGroup][taskTypeUpdate][i].data.(posixGroup).dn)
+	if len(taskList[models.ObjectTypePosixGroup][models.TaskTypeUpdate]) > 0 {
+		for i = range taskList[models.ObjectTypePosixGroup][models.TaskTypeUpdate] {
+			yellow("\n~~ dn:          %s\n", taskList[models.ObjectTypePosixGroup][models.TaskTypeUpdate][i].Data.(models.PosixGroup).DN)
 
-			if taskList[objectTypePosixGroup][taskTypeUpdate][i].data.(posixGroup).GIDNumber != nil {
+			if taskList[models.ObjectTypePosixGroup][models.TaskTypeUpdate][i].Data.(models.PosixGroup).GIDNumber != nil {
 				yellow("   gid_number:  %d\n",
-					*taskList[objectTypePosixGroup][taskTypeUpdate][i].data.(posixGroup).GIDNumber)
+					*taskList[models.ObjectTypePosixGroup][models.TaskTypeUpdate][i].Data.(models.PosixGroup).GIDNumber)
 			}
 
-			if taskList[objectTypePosixGroup][taskTypeUpdate][i].data.(posixGroup).Description != "" {
+			if taskList[models.ObjectTypePosixGroup][models.TaskTypeUpdate][i].Data.(models.PosixGroup).Description != "" {
 				yellow("   description:  %s\n",
-					taskList[objectTypePosixGroup][taskTypeUpdate][i].data.(posixGroup).Description)
+					taskList[models.ObjectTypePosixGroup][models.TaskTypeUpdate][i].Data.(models.PosixGroup).Description)
 			}
 		}
 	}
 
-	if len(taskList[objectTypePosixGroup][taskTypeDelete]) > 0 {
+	if len(taskList[models.ObjectTypePosixGroup][models.TaskTypeDelete]) > 0 {
 		fmt.Println()
-		for i = range taskList[objectTypePosixGroup][taskTypeDelete] {
-			red("-- dn: %s\n", *taskList[objectTypePosixGroup][taskTypeDelete][i].dn)
+		for i = range taskList[models.ObjectTypePosixGroup][models.TaskTypeDelete] {
+			red("-- dn: %s\n", *taskList[models.ObjectTypePosixGroup][models.TaskTypeDelete][i].DN)
 		}
 	}
 }
 
-// prettyPrintPosixAccounts displays posixAccount changes in a pretty way
+// prettyPrintPosixAccounts displays models.PosixAccount changes in a pretty way
 func prettyPrintPosixAccounts() {
 	var (
 		i int
@@ -117,117 +119,117 @@ func prettyPrintPosixAccounts() {
 
 	fmt.Printf("\n==> PosixAccounts <==")
 
-	if len(taskList[objectTypePosixGroup][taskTypeCreate]) > 0 {
-		for i = range taskList[objectTypePosixGroup][taskTypeCreate] {
+	if len(taskList[models.ObjectTypePosixGroup][models.TaskTypeCreate]) > 0 {
+		for i = range taskList[models.ObjectTypePosixGroup][models.TaskTypeCreate] {
 
 			green("\n++ dn:             %s\n   username:       %s\n   given_name:     %s\n   surname:        %s\n   display_name:   %s\n",
-				taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).dn,
-				*taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).UID,
-				*taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).GivenName,
-				*taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).Surname,
-				*taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).DisplayName)
+				taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).DN,
+				*taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).UID,
+				*taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).GivenName,
+				*taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).Surname,
+				*taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).DisplayName)
 
-			if taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).UIDNumber == nil {
+			if taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).UIDNumber == nil {
 				green("   uid_number:     *known after sync*\n")
 			} else {
 				green("   uid_number:     %d\n",
-					*taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).UIDNumber)
+					*taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).UIDNumber)
 			}
 
 			green("   gid_number:     %d\n   login_shell:    %s\n   mail:           %s\n   home_dir:       %s\n",
-				*taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).GIDNumber,
-				*taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).LoginShell,
-				*taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).Mail,
-				*taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).HomeDir)
+				*taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).GIDNumber,
+				*taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).LoginShell,
+				*taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).Mail,
+				*taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).HomeDir)
 
 			// check for additional, optional information
-			if *config.EnableSSHPublicKeys {
-				if taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).SSHPublicKey == nil {
+			if *rt.Config.EnableSSHPublicKeys {
+				if taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).SSHPublicKey == nil {
 					green("   ssh_public_key: *none*\n")
 
 				} else {
 					green("   ssh_public_key: %s\n",
-						*taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).SSHPublicKey)
+						*taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).SSHPublicKey)
 				}
 			}
 
-			if taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).UserPassword != nil {
+			if taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).UserPassword != nil {
 				green("   user_password:  %s\n",
-					*taskList[objectTypePosixAccount][taskTypeCreate][i].data.(posixAccount).UserPassword)
+					*taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate][i].Data.(models.PosixAccount).UserPassword)
 			}
 		}
 	}
 
-	if len(taskList[objectTypePosixAccount][taskTypeUpdate]) > 0 {
-		for i = range taskList[objectTypePosixAccount][taskTypeUpdate] {
-			yellow("\n~~ dn:             %s\n", taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).dn)
+	if len(taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate]) > 0 {
+		for i = range taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate] {
+			yellow("\n~~ dn:             %s\n", taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).DN)
 
 			// changing username will result in a new object therefore not checking for a change here
 
-			if taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).GivenName != nil {
+			if taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).GivenName != nil {
 				yellow("   given_name:     %s\n",
-					*taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).GivenName)
+					*taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).GivenName)
 			}
 
-			if taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).Surname != nil {
+			if taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).Surname != nil {
 				yellow("   surname:        %s\n",
-					*taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).Surname)
+					*taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).Surname)
 			}
 
-			if taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).DisplayName != nil {
+			if taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).DisplayName != nil {
 				yellow("   display_name:    %s\n",
-					*taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).DisplayName)
+					*taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).DisplayName)
 			}
 
-			if taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).UIDNumber != nil {
+			if taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).UIDNumber != nil {
 				yellow("   uid_number:     %d\n",
-					*taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).UIDNumber)
+					*taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).UIDNumber)
 			}
 
-			if taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).GIDNumber != nil {
+			if taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).GIDNumber != nil {
 				yellow("   gid_number:     %d\n",
-					*taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).GIDNumber)
+					*taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).GIDNumber)
 			}
 
-			if taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).LoginShell != nil {
+			if taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).LoginShell != nil {
 				yellow("   login_shell:    %s\n",
-					*taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).LoginShell)
+					*taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).LoginShell)
 			}
 
-			if taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).Mail != nil {
+			if taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).Mail != nil {
 				yellow("   mail:           %s\n",
-					*taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).Mail)
+					*taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).Mail)
 			}
 
-			if taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).HomeDir != nil {
+			if taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).HomeDir != nil {
 				yellow("   home_dir:       %s\n",
-					*taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).HomeDir)
+					*taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).HomeDir)
 			}
 
 			// check for additional, optional information
-			if *config.EnableSSHPublicKeys &&
-				taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).SSHPublicKey != nil {
+			if *rt.Config.EnableSSHPublicKeys &&
+				taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).SSHPublicKey != nil {
 
-				if *taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).SSHPublicKey == "" {
+				if *taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).SSHPublicKey == "" {
 					// key is to be deleted
 					red("   ssh_public_key: *to be removed*\n")
 				} else {
 					yellow("   ssh_public_key: %s\n",
-						*taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).SSHPublicKey)
+						*taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).SSHPublicKey)
 				}
 			}
 
-			if taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).UserPassword != nil {
+			if taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).UserPassword != nil {
 				yellow("   user_password:  %s\n",
-					*taskList[objectTypePosixAccount][taskTypeUpdate][i].data.(posixAccount).UserPassword)
+					*taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate][i].Data.(models.PosixAccount).UserPassword)
 			}
 		}
 	}
 
-	if len(taskList[objectTypePosixAccount][taskTypeDelete]) > 0 {
+	if len(taskList[models.ObjectTypePosixAccount][models.TaskTypeDelete]) > 0 {
 		fmt.Println()
-		for i = range taskList[objectTypePosixAccount][taskTypeDelete] {
-			red("-- dn: %s\n", *taskList[objectTypePosixAccount][taskTypeDelete][i].dn)
+		for i = range taskList[models.ObjectTypePosixAccount][models.TaskTypeDelete] {
+			red("-- dn: %s\n", *taskList[models.ObjectTypePosixAccount][models.TaskTypeDelete][i].DN)
 		}
 	}
 }
@@ -246,79 +248,79 @@ func prettyPrintGroupOfNames() {
 	changedMembers = make(map[string]map[string][]string)
 
 	// reorganize addMember & deleteMember tasks
-	if len(taskList[objectTypeGroupOfNames][taskTypeAddMember]) > 0 {
-		for i = range taskList[objectTypeGroupOfNames][taskTypeAddMember] {
+	if len(taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember]) > 0 {
+		for i = range taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember] {
 			// init map for this DN
-			if changedMembers[*taskList[objectTypeGroupOfNames][taskTypeAddMember][i].dn] == nil {
-				changedMembers[*taskList[objectTypeGroupOfNames][taskTypeAddMember][i].dn] = make(map[string][]string)
+			if changedMembers[*taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember][i].DN] == nil {
+				changedMembers[*taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember][i].DN] = make(map[string][]string)
 			}
 
-			changedMembers[*taskList[objectTypeGroupOfNames][taskTypeAddMember][i].dn]["add"] = append(changedMembers[*taskList[objectTypeGroupOfNames][taskTypeAddMember][i].dn]["add"], taskList[objectTypeGroupOfNames][taskTypeAddMember][i].data.(string))
+			changedMembers[*taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember][i].DN]["add"] = append(changedMembers[*taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember][i].DN]["add"], taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember][i].Data.(string))
 		}
 	}
 
-	if len(taskList[objectTypeGroupOfNames][taskTypeDeleteMember]) > 0 {
-		for i = range taskList[objectTypeGroupOfNames][taskTypeDeleteMember] {
-			if changedMembers[*taskList[objectTypeGroupOfNames][taskTypeDeleteMember][i].dn] == nil {
-				changedMembers[*taskList[objectTypeGroupOfNames][taskTypeDeleteMember][i].dn] = make(map[string][]string)
+	if len(taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDeleteMember]) > 0 {
+		for i = range taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDeleteMember] {
+			if changedMembers[*taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDeleteMember][i].DN] == nil {
+				changedMembers[*taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDeleteMember][i].DN] = make(map[string][]string)
 			}
 
-			changedMembers[*taskList[objectTypeGroupOfNames][taskTypeDeleteMember][i].dn]["del"] = append(changedMembers[*taskList[objectTypeGroupOfNames][taskTypeDeleteMember][i].dn]["del"], taskList[objectTypeGroupOfNames][taskTypeDeleteMember][i].data.(string))
+			changedMembers[*taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDeleteMember][i].DN]["del"] = append(changedMembers[*taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDeleteMember][i].DN]["del"], taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDeleteMember][i].Data.(string))
 		}
 	}
 
 	fmt.Printf("\n==> GroupOfNames <==")
 
-	if len(taskList[objectTypeGroupOfNames][taskTypeCreate]) > 0 {
-		for i = range taskList[objectTypeGroupOfNames][taskTypeCreate] {
+	if len(taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate]) > 0 {
+		for i = range taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate] {
 			green("\n++ dn:          %s\n   cn:          %s\n   description: %s\n",
-				taskList[objectTypeGroupOfNames][taskTypeCreate][i].data.(groupOfNames).dn,
-				taskList[objectTypeGroupOfNames][taskTypeCreate][i].data.(groupOfNames).CN,
-				taskList[objectTypeGroupOfNames][taskTypeCreate][i].data.(groupOfNames).Description)
+				taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate][i].Data.(models.GroupOfNames).DN,
+				taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate][i].Data.(models.GroupOfNames).CN,
+				taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate][i].Data.(models.GroupOfNames).Description)
 
 			// check for new members of this group
-			if _, ok = changedMembers[taskList[objectTypeGroupOfNames][taskTypeCreate][i].data.(groupOfNames).dn]; ok {
+			if _, ok = changedMembers[taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate][i].Data.(models.GroupOfNames).DN]; ok {
 				green("   members:\n")
 
 				// check for members to add
-				for j = range changedMembers[taskList[objectTypeGroupOfNames][taskTypeCreate][i].data.(groupOfNames).dn]["add"] {
+				for j = range changedMembers[taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate][i].Data.(models.GroupOfNames).DN]["add"] {
 
-					green("     ++ dn:     %s\n", changedMembers[taskList[objectTypeGroupOfNames][taskTypeCreate][i].data.(groupOfNames).dn]["add"][j])
+					green("     ++ dn:     %s\n", changedMembers[taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate][i].Data.(models.GroupOfNames).DN]["add"][j])
 				}
 
 				// delete from map
-				delete(changedMembers, taskList[objectTypeGroupOfNames][taskTypeCreate][i].data.(groupOfNames).dn)
+				delete(changedMembers, taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate][i].Data.(models.GroupOfNames).DN)
 			}
 		}
 	}
 
-	if len(taskList[objectTypeGroupOfNames][taskTypeUpdate]) > 0 {
-		for i = range taskList[objectTypeGroupOfNames][taskTypeUpdate] {
-			yellow("\n~~ dn:          %s\n", taskList[objectTypeGroupOfNames][taskTypeUpdate][i].data.(groupOfNames).dn)
+	if len(taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate]) > 0 {
+		for i = range taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate] {
+			yellow("\n~~ dn:          %s\n", taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate][i].Data.(models.GroupOfNames).DN)
 
-			if taskList[objectTypeGroupOfNames][taskTypeUpdate][i].data.(groupOfNames).Description != "" {
+			if taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate][i].Data.(models.GroupOfNames).Description != "" {
 				yellow("   description: %s\n",
-					taskList[objectTypeGroupOfNames][taskTypeUpdate][i].data.(groupOfNames).Description)
+					taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate][i].Data.(models.GroupOfNames).Description)
 			}
 
-			// check for member changes in this groupOfNames
-			if _, ok = changedMembers[taskList[objectTypeGroupOfNames][taskTypeUpdate][i].data.(groupOfNames).dn]; ok {
+			// check for member changes in this models.GroupOfNames
+			if _, ok = changedMembers[taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate][i].Data.(models.GroupOfNames).DN]; ok {
 				yellow("   members:\n")
 
 				// check for members to add
-				for j = range changedMembers[taskList[objectTypeGroupOfNames][taskTypeUpdate][i].data.(groupOfNames).dn]["add"] {
+				for j = range changedMembers[taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate][i].Data.(models.GroupOfNames).DN]["add"] {
 
-					green("     ++ dn:     %s\n", changedMembers[taskList[objectTypeGroupOfNames][taskTypeUpdate][i].data.(groupOfNames).dn]["add"][j])
+					green("     ++ dn:     %s\n", changedMembers[taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate][i].Data.(models.GroupOfNames).DN]["add"][j])
 				}
 
 				// check for members to delete
-				for j = range changedMembers[taskList[objectTypeGroupOfNames][taskTypeUpdate][i].data.(groupOfNames).dn]["del"] {
+				for j = range changedMembers[taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate][i].Data.(models.GroupOfNames).DN]["del"] {
 
-					red("     -- dn:     %s\n", changedMembers[taskList[objectTypeGroupOfNames][taskTypeUpdate][i].data.(groupOfNames).dn]["del"][j])
+					red("     -- dn:     %s\n", changedMembers[taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate][i].Data.(models.GroupOfNames).DN]["del"][j])
 				}
 
 				// delete from map
-				delete(changedMembers, taskList[objectTypeGroupOfNames][taskTypeUpdate][i].data.(groupOfNames).dn)
+				delete(changedMembers, taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate][i].Data.(models.GroupOfNames).DN)
 			}
 
 		}
@@ -338,10 +340,10 @@ func prettyPrintGroupOfNames() {
 		}
 	}
 
-	if len(taskList[objectTypeGroupOfNames][taskTypeDelete]) > 0 {
+	if len(taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDelete]) > 0 {
 		fmt.Println()
-		for i = range taskList[objectTypeGroupOfNames][taskTypeDelete] {
-			red("-- dn: %s\n", *taskList[objectTypeGroupOfNames][taskTypeDelete][i].dn)
+		for i = range taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDelete] {
+			red("-- dn: %s\n", *taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDelete][i].DN)
 		}
 	}
 }
@@ -350,17 +352,17 @@ func prettyPrintGroupOfNames() {
 func prettyPrintSUDOers() {
 	var (
 		i    int
-		role sudoRole
+		role models.SudoRole
 	)
 
 	fmt.Printf("\n==> SUDOers <==")
 
-	if len(taskList[objectTypeSudoRole][taskTypeCreate]) > 0 {
-		for i = range taskList[objectTypeSudoRole][taskTypeCreate] {
-			role = taskList[objectTypeSudoRole][taskTypeCreate][i].data.(sudoRole)
+	if len(taskList[models.ObjectTypeSudoRole][models.TaskTypeCreate]) > 0 {
+		for i = range taskList[models.ObjectTypeSudoRole][models.TaskTypeCreate] {
+			role = taskList[models.ObjectTypeSudoRole][models.TaskTypeCreate][i].Data.(models.SudoRole)
 
 			green("\n++ dn:  %s\n   name:   %s\n",
-				role.dn,
+				role.DN,
 				role.CN)
 
 			// now all optional details
@@ -438,11 +440,11 @@ func prettyPrintSUDOers() {
 		}
 	}
 
-	if len(taskList[objectTypeSudoRole][taskTypeUpdate]) > 0 {
-		for i = range taskList[objectTypeSudoRole][taskTypeUpdate] {
-			role = taskList[objectTypeSudoRole][taskTypeUpdate][i].data.(sudoRole)
+	if len(taskList[models.ObjectTypeSudoRole][models.TaskTypeUpdate]) > 0 {
+		for i = range taskList[models.ObjectTypeSudoRole][models.TaskTypeUpdate] {
+			role = taskList[models.ObjectTypeSudoRole][models.TaskTypeUpdate][i].Data.(models.SudoRole)
 
-			yellow("\n~~ dn:\t%s\n", role.dn)
+			yellow("\n~~ dn:\t%s\n", role.DN)
 
 			// now all optional details
 			if role.Description != "" {
@@ -520,10 +522,10 @@ func prettyPrintSUDOers() {
 		}
 	}
 
-	if len(taskList[objectTypeSudoRole][taskTypeDelete]) > 0 {
+	if len(taskList[models.ObjectTypeSudoRole][models.TaskTypeDelete]) > 0 {
 		fmt.Println()
-		for i = range taskList[objectTypeSudoRole][taskTypeDelete] {
-			red("-- dn: %s\n", *taskList[objectTypeSudoRole][taskTypeDelete][i].dn)
+		for i = range taskList[models.ObjectTypeSudoRole][models.TaskTypeDelete] {
+			red("-- dn: %s\n", *taskList[models.ObjectTypeSudoRole][models.TaskTypeDelete][i].DN)
 		}
 	}
 
@@ -553,7 +555,7 @@ func prettyPrintAudit() {
 		fmt.Printf("\n====== START POSIXGROUP ======")
 
 		fmt.Fprintf(w, "\ndn:\t%s\nname:\t%s\ndescription:\t%s\ngid_number:\t%d\nmembers:",
-			ldapPeople[dn].dn,
+			ldapPeople[dn].DN,
 			ldapPeople[dn].CN,
 			ldapPeople[dn].Description,
 			*ldapPeople[dn].GIDNumber)
@@ -564,7 +566,7 @@ func prettyPrintAudit() {
 
 			//fmt.Fprintf(w, "\ndn:\t%s\nusername:\t%s\ngiven_name:\t%s\nsurname:\t%s\ndisplay_name:\t%s\nuid_number:\t%d\ngid_number:\t%d\nlogin_shell:\t%s\nmail:\t%s\nhome_dir:\t%s\n",
 			fmt.Fprintf(w, "\n  dn:\t%s\n  username:\t%s\n  given_name:\t%s\n  surname:\t%s\n  display_name:\t%s\n  uid_number:\t%d\n  gid_number:\t%d\n  login_shell:\t%s\n  mail:\t%s\n  home_dir:\t%s\n",
-				ldapPeople[dn].Objects[index].dn,
+				ldapPeople[dn].Objects[index].DN,
 				*ldapPeople[dn].Objects[index].UID,
 				*ldapPeople[dn].Objects[index].GivenName,
 				*ldapPeople[dn].Objects[index].Surname,

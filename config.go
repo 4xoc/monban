@@ -7,195 +7,197 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/4xoc/monban/models"
+
 	"github.com/kpango/glg"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/crypto/ssh"
 	"gopkg.in/yaml.v3"
 )
 
-// readConfiguration reads a given main configuration file
+// readConfiguration reads a given main rt.Configuration file
 func readConfiguration(c *cli.Context) error {
 	var (
 		yamlFile []byte
 		err      error
 	)
 
-	glg.Infof("reading main configuration file")
+	glg.Infof("reading main rt.Configuration file")
 
-	// get absolut base path of monban config
-	basePath, err = filepath.Abs(filepath.Dir(configFile))
+	// get absolut base path of monban rt.Config
+	rt.BasePath, err = filepath.Abs(filepath.Dir(rt.ConfigFile))
 	if err != nil {
-		return fmt.Errorf("failed to get path to config file: %s", err.Error())
+		return fmt.Errorf("failed to get path to rt.Config file: %s", err.Error())
 	}
 
-	configFile = filepath.Join(basePath, filepath.Base(configFile))
+	rt.ConfigFile = filepath.Join(rt.BasePath, filepath.Base(rt.ConfigFile))
 
-	glg.Debugf("main config file path: %s", configFile)
+	glg.Debugf("main rt.Config file path: %s", rt.ConfigFile)
 
-	yamlFile, err = ioutil.ReadFile(configFile)
+	yamlFile, err = ioutil.ReadFile(rt.ConfigFile)
 	if err != nil {
-		return fmt.Errorf("failed to load config file: %s", err.Error())
+		return fmt.Errorf("failed to load rt.Config file: %s", err.Error())
 	}
 
-	err = yaml.Unmarshal(yamlFile, &config)
+	err = yaml.Unmarshal(yamlFile, &rt.Config)
 	if err != nil {
-		return fmt.Errorf("failed to parse config file: %s", err.Error())
+		return fmt.Errorf("failed to parse rt.Config file: %s", err.Error())
 	}
 
-	// userDN and userPassword are set by cli arguments and shouldn't be overwritten
+	// rt.UserDN and rt.UserPassword are set by cli arguments and shouldn't be overwritten
 	// sanity check
-	if config.UserDN == nil && userDN == "" {
-		return fmt.Errorf("user_dn is not set in config file or supplied as argument")
-	} else if userDN != "" {
-		config.UserDN = &userDN
+	if rt.Config.UserDN == nil && rt.UserDN == "" {
+		return fmt.Errorf("user_dn is not set in rt.Config file or supplied as argument")
+	} else if rt.UserDN != "" {
+		rt.Config.UserDN = &rt.UserDN
 	}
 
-	if config.UserPassword == nil && userPassword == "" {
-		return fmt.Errorf("user_password is not set in config file or supplied as argument")
-	} else if userPassword != "" {
-		config.UserPassword = &userPassword
+	if rt.Config.UserPassword == nil && rt.UserPassword == "" {
+		return fmt.Errorf("user_password is not set in rt.Config file or supplied as argument")
+	} else if rt.UserPassword != "" {
+		rt.Config.UserPassword = &rt.UserPassword
 	}
 
-	if config.EnableSSHPublicKeys == nil {
-		config.EnableSSHPublicKeys = new(bool)
-		*config.EnableSSHPublicKeys = false
+	if rt.Config.EnableSSHPublicKeys == nil {
+		rt.Config.EnableSSHPublicKeys = new(bool)
+		*rt.Config.EnableSSHPublicKeys = false
 	}
 
-	if config.HostURI == nil {
-		return fmt.Errorf("missing required config `host_uri`")
+	if rt.Config.HostURI == nil {
+		return fmt.Errorf("missing required rt.Config `host_uri`")
 	}
 
-	if config.GroupDir == nil {
-		return fmt.Errorf("missing required config `group_dir`")
+	if rt.Config.GroupDir == nil {
+		return fmt.Errorf("missing required rt.Config `group_dir`")
 	} else {
 		// if relative, make it absolute
-		if !filepath.IsAbs(*config.GroupDir) {
-			*config.GroupDir = filepath.Join(filepath.Dir(configFile), *config.GroupDir)
+		if !filepath.IsAbs(*rt.Config.GroupDir) {
+			*rt.Config.GroupDir = filepath.Join(filepath.Dir(rt.ConfigFile), *rt.Config.GroupDir)
 		}
 	}
 
-	if config.PeopleDir == nil {
-		return fmt.Errorf("missing required config `localPeople_dir`")
+	if rt.Config.PeopleDir == nil {
+		return fmt.Errorf("missing required rt.Config `localPeople_dir`")
 	} else {
 		// if relative, make it absolute
-		if !filepath.IsAbs(*config.PeopleDir) {
-			*config.PeopleDir = filepath.Join(filepath.Dir(configFile), *config.PeopleDir)
+		if !filepath.IsAbs(*rt.Config.PeopleDir) {
+			*rt.Config.PeopleDir = filepath.Join(filepath.Dir(rt.ConfigFile), *rt.Config.PeopleDir)
 		}
 	}
 
-	if config.RootDN == nil {
-		return fmt.Errorf("missing required config `root_dn`")
+	if rt.Config.RootDN == nil {
+		return fmt.Errorf("missing required rt.Config `root_dn`")
 	}
 
-	if config.PeopleRDN != nil {
-		peopleDN = fmt.Sprintf("%s,%s", *config.PeopleRDN, *config.RootDN)
+	if rt.Config.PeopleRDN != nil {
+		rt.PeopleDN = fmt.Sprintf("%s,%s", *rt.Config.PeopleRDN, *rt.Config.RootDN)
 	} else {
-		peopleDN = *config.RootDN
+		rt.PeopleDN = *rt.Config.RootDN
 	}
 
-	if config.GroupRDN != nil {
-		groupDN = fmt.Sprintf("%s,%s", *config.GroupRDN, *config.RootDN)
+	if rt.Config.GroupRDN != nil {
+		rt.GroupDN = fmt.Sprintf("%s,%s", *rt.Config.GroupRDN, *rt.Config.RootDN)
 	} else {
-		groupDN = *config.RootDN
+		rt.GroupDN = *rt.Config.RootDN
 	}
 
-	glg.Debugf("=== config value from file and arguments ===")
-	glg.Debugf("               host_uri: %s", *config.HostURI)
-	glg.Debugf("                user_dn: %s", *config.UserDN)
-	glg.Debugf("          user_password: %s", *config.UserPassword)
-	glg.Debugf(" enable_ssh_public_keys: %t", *config.EnableSSHPublicKeys)
-	glg.Debugf("              group_dir: %s", *config.GroupDir)
-	glg.Debugf("             people_dir: %s", *config.PeopleDir)
-	glg.Debugf("                root_dn: %s", *config.RootDN)
-	glg.Debugf("             people_rdn: %s", *config.PeopleRDN)
-	glg.Debugf("              group_rdn: %s", *config.GroupRDN)
-	glg.Debugf("            enable_sudo: %t", config.EnableSudo)
-	glg.Debugf("           generate_uid: %t", config.GenerateUID)
+	glg.Debugf("=== rt.Config value from file and arguments ===")
+	glg.Debugf("               host_uri: %s", *rt.Config.HostURI)
+	glg.Debugf("                user_dn: %s", *rt.Config.UserDN)
+	glg.Debugf("          user_password: %s", *rt.Config.UserPassword)
+	glg.Debugf(" enable_ssh_public_keys: %t", *rt.Config.EnableSSHPublicKeys)
+	glg.Debugf("              group_dir: %s", *rt.Config.GroupDir)
+	glg.Debugf("             people_dir: %s", *rt.Config.PeopleDir)
+	glg.Debugf("                root_dn: %s", *rt.Config.RootDN)
+	glg.Debugf("             people_rdn: %s", *rt.Config.PeopleRDN)
+	glg.Debugf("              group_rdn: %s", *rt.Config.GroupRDN)
+	glg.Debugf("            enable_sudo: %t", rt.Config.EnableSudo)
+	glg.Debugf("           generate_uid: %t", rt.Config.GenerateUID)
 
-	if config.GenerateUID {
+	if rt.Config.GenerateUID {
 		// only tell about limit if defined
-		if config.MinUID != 0 {
-			glg.Debugf("                min_uid: %d", config.MinUID)
-			latestUID = config.MinUID - 1 // uid is always incremented
+		if rt.Config.MinUID != 0 {
+			glg.Debugf("                min_uid: %d", rt.Config.MinUID)
+			rt.LatestUID = rt.Config.MinUID - 1 // uid is always incremented
 		}
 
 		// only tell about limit if defined
-		if config.MaxUID != 0 {
-			glg.Debugf("                max_uid: %d", config.MaxUID)
+		if rt.Config.MaxUID != 0 {
+			glg.Debugf("                max_uid: %d", rt.Config.MaxUID)
 		}
 	}
 
-	if config.Defaults.DisplayName != nil {
-		glg.Debugf(" (default) display_name: %s", *config.Defaults.DisplayName)
+	if rt.Config.Defaults.DisplayName != nil {
+		glg.Debugf(" (default) display_name: %s", *rt.Config.Defaults.DisplayName)
 	}
 
-	if config.Defaults.LoginShell != nil {
-		glg.Debugf("  (default) login_shell: %s", *config.Defaults.LoginShell)
+	if rt.Config.Defaults.LoginShell != nil {
+		glg.Debugf("  (default) login_shell: %s", *rt.Config.Defaults.LoginShell)
 	}
 
-	if config.Defaults.Mail != nil {
-		glg.Debugf("         (default) mail: %s", *config.Defaults.Mail)
+	if rt.Config.Defaults.Mail != nil {
+		glg.Debugf("         (default) mail: %s", *rt.Config.Defaults.Mail)
 	}
 
-	if config.Defaults.HomeDir != nil {
-		glg.Debugf("     (default) home_dir: %s", *config.Defaults.HomeDir)
+	if rt.Config.Defaults.HomeDir != nil {
+		glg.Debugf("     (default) home_dir: %s", *rt.Config.Defaults.HomeDir)
 	}
 
-	if config.Defaults.UserPassword != nil {
-		glg.Debugf("(default) user_password: %s", *config.Defaults.UserPassword)
+	if rt.Config.Defaults.UserPassword != nil {
+		glg.Debugf("(default) user_password: %s", *rt.Config.Defaults.UserPassword)
 	}
 
 	// sudo defaults
-	if config.Defaults.Sudo != nil {
+	if rt.Config.Defaults.Sudo != nil {
 		// always overwrite CN
-		config.Defaults.Sudo.CN = "Defaults"
+		rt.Config.Defaults.Sudo.CN = "Defaults"
 
 	}
 
-	glg.Infof("done reading main configuration file")
+	glg.Infof("done reading main rt.Configuration file")
 
 	// init maps
 	// taskList is split into multiple maps to systematically structure the tasks (which gets rid of a lot of loops
-	// further down the line). The first map is for each objectType, the second for the actions for such objectType.
+	// further down the line). The first map is for each models.ObjectType, the second for the actions for such models.ObjectType.
 	// To not constantly check if every key is initialized the whole map is run through make(). Checks then only require
 	// to look for map length.
-	taskList[objectTypePosixAccount] = make(map[int][]*actionTask)
-	taskList[objectTypePosixAccount][taskTypeCreate] = make([]*actionTask, 0, 0)
-	taskList[objectTypePosixAccount][taskTypeUpdate] = make([]*actionTask, 0, 0)
-	taskList[objectTypePosixAccount][taskTypeDelete] = make([]*actionTask, 0, 0)
+	taskList[models.ObjectTypePosixAccount] = make(map[int][]*models.ActionTask)
+	taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate] = make([]*models.ActionTask, 0, 0)
+	taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate] = make([]*models.ActionTask, 0, 0)
+	taskList[models.ObjectTypePosixAccount][models.TaskTypeDelete] = make([]*models.ActionTask, 0, 0)
 
-	taskList[objectTypePosixGroup] = make(map[int][]*actionTask)
-	taskList[objectTypePosixGroup][taskTypeCreate] = make([]*actionTask, 0, 0)
-	taskList[objectTypePosixGroup][taskTypeUpdate] = make([]*actionTask, 0, 0)
-	taskList[objectTypePosixGroup][taskTypeDelete] = make([]*actionTask, 0, 0)
+	taskList[models.ObjectTypePosixGroup] = make(map[int][]*models.ActionTask)
+	taskList[models.ObjectTypePosixGroup][models.TaskTypeCreate] = make([]*models.ActionTask, 0, 0)
+	taskList[models.ObjectTypePosixGroup][models.TaskTypeUpdate] = make([]*models.ActionTask, 0, 0)
+	taskList[models.ObjectTypePosixGroup][models.TaskTypeDelete] = make([]*models.ActionTask, 0, 0)
 
-	taskList[objectTypeGroupOfNames] = make(map[int][]*actionTask)
-	taskList[objectTypeGroupOfNames][taskTypeCreate] = make([]*actionTask, 0, 0)
-	taskList[objectTypeGroupOfNames][taskTypeUpdate] = make([]*actionTask, 0, 0)
-	taskList[objectTypeGroupOfNames][taskTypeDelete] = make([]*actionTask, 0, 0)
-	taskList[objectTypeGroupOfNames][taskTypeAddMember] = make([]*actionTask, 0, 0)
-	taskList[objectTypeGroupOfNames][taskTypeDeleteMember] = make([]*actionTask, 0, 0)
+	taskList[models.ObjectTypeGroupOfNames] = make(map[int][]*models.ActionTask)
+	taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate] = make([]*models.ActionTask, 0, 0)
+	taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate] = make([]*models.ActionTask, 0, 0)
+	taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDelete] = make([]*models.ActionTask, 0, 0)
+	taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember] = make([]*models.ActionTask, 0, 0)
+	taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDeleteMember] = make([]*models.ActionTask, 0, 0)
 
-	taskList[objectTypeOrganisationalUnit] = make(map[int][]*actionTask)
-	taskList[objectTypeOrganisationalUnit][taskTypeCreate] = make([]*actionTask, 0, 0)
-	taskList[objectTypeOrganisationalUnit][taskTypeDelete] = make([]*actionTask, 0, 0)
+	taskList[models.ObjectTypeOrganisationalUnit] = make(map[int][]*models.ActionTask)
+	taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeCreate] = make([]*models.ActionTask, 0, 0)
+	taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeDelete] = make([]*models.ActionTask, 0, 0)
 
-	taskList[objectTypeSudoRole] = make(map[int][]*actionTask)
-	taskList[objectTypeSudoRole][taskTypeCreate] = make([]*actionTask, 0, 0)
-	taskList[objectTypeSudoRole][taskTypeUpdate] = make([]*actionTask, 0, 0)
-	taskList[objectTypeSudoRole][taskTypeDelete] = make([]*actionTask, 0, 0)
+	taskList[models.ObjectTypeSudoRole] = make(map[int][]*models.ActionTask)
+	taskList[models.ObjectTypeSudoRole][models.TaskTypeCreate] = make([]*models.ActionTask, 0, 0)
+	taskList[models.ObjectTypeSudoRole][models.TaskTypeUpdate] = make([]*models.ActionTask, 0, 0)
+	taskList[models.ObjectTypeSudoRole][models.TaskTypeDelete] = make([]*models.ActionTask, 0, 0)
 
 	return nil
 }
 
-// readPeopleConfiguration reads a localPeople config dir and performs some basic sanity checks
+// readPeopleConfiguration reads a localPeople rt.Config dir and performs some basic sanity checks
 func readPeopleConfiguration() error {
 	var (
 		err           error
 		files         []string
 		currentFile   string
 		yamlFile      []byte
-		currentPeople *posixGroup
+		currentPeople *models.PosixGroup
 		userIndex     int
 		knownUsers    []string
 		i             int
@@ -204,12 +206,12 @@ func readPeopleConfiguration() error {
 		relPath       string
 	)
 
-	glg.Infof("reading people configuration file")
+	glg.Infof("reading people rt.Configuration file")
 
-	err = filepath.Walk(filepath.Join(*config.PeopleDir),
+	err = filepath.Walk(filepath.Join(*rt.Config.PeopleDir),
 		func(path string, info os.FileInfo, err error) error {
 			var (
-				ou *organizationalUnit
+				ou *models.OrganizationalUnit
 			)
 
 			if err != nil {
@@ -220,24 +222,24 @@ func readPeopleConfiguration() error {
 				// check if dir needs added as a new OU
 				// split path into dirs, each one will be its own OU in LDAP
 
-				relPath, _ = filepath.Rel(*config.PeopleDir, path)
+				relPath, _ = filepath.Rel(*rt.Config.PeopleDir, path)
 
 				if relPath != "." {
 					// only creating an OU of the path is not the people_dir
 
 					pathPieces = strings.Split(relPath, "/")
 
-					ou = new(organizationalUnit)
-					ou.cn = info.Name()
-					ou.description = "Managed by Monban"
+					ou = new(models.OrganizationalUnit)
+					ou.CN = info.Name()
+					ou.Description = "Managed by Monban"
 
 					if len(pathPieces) <= 1 {
-						ou.dn = fmt.Sprintf("ou=%s,%s", ou.cn, peopleDN)
+						ou.DN = fmt.Sprintf("ou=%s,%s", ou.CN, rt.PeopleDN)
 					} else {
-						ou.dn = fmt.Sprintf("ou=%s,%s,%s", ou.cn, generateOUDN(pathPieces[:len(pathPieces)-1]), peopleDN)
+						ou.DN = fmt.Sprintf("ou=%s,%s,%s", ou.CN, generateOUDN(pathPieces[:len(pathPieces)-1]), rt.PeopleDN)
 					}
 
-					glg.Debugf("found intermediate OU %s", ou.dn)
+					glg.Debugf("found intermediate OU %s", ou.DN)
 					localOUs = append(localOUs, ou)
 				}
 
@@ -254,18 +256,18 @@ func readPeopleConfiguration() error {
 
 	for _, currentFile = range files {
 
-		glg.Infof("reading local people config file %s", currentFile)
+		glg.Infof("reading local people rt.Config file %s", currentFile)
 
 		yamlFile, err = ioutil.ReadFile(currentFile)
 		if err != nil {
-			return fmt.Errorf("failed to load user config file: '%s'", err.Error())
+			return fmt.Errorf("failed to load user rt.Config file: '%s'", err.Error())
 		}
 
 		// currentPeople needs to be reset before every Unmarshal
-		currentPeople = new(posixGroup)
+		currentPeople = new(models.PosixGroup)
 		err = yaml.Unmarshal(yamlFile, currentPeople)
 		if err != nil {
-			return fmt.Errorf("failed to parse config file: '%s'", err.Error())
+			return fmt.Errorf("failed to parse rt.Config file: '%s'", err.Error())
 		}
 
 		// unless cn has been specifically set, set cn based on file name
@@ -274,20 +276,20 @@ func readPeopleConfiguration() error {
 		}
 
 		// set dn
-		relPath, _ = filepath.Rel(*config.PeopleDir, currentFile)
+		relPath, _ = filepath.Rel(*rt.Config.PeopleDir, currentFile)
 		pathPieces = strings.Split(relPath, "/")
 		if len(pathPieces) <= 1 {
-			currentPeople.dn = fmt.Sprintf("cn=%s,%s", currentPeople.CN, peopleDN)
+			currentPeople.DN = fmt.Sprintf("cn=%s,%s", currentPeople.CN, rt.PeopleDN)
 		} else {
-			currentPeople.dn = fmt.Sprintf("cn=%s,%s,%s", currentPeople.CN, generateOUDN(pathPieces[:len(pathPieces)-1]), peopleDN)
+			currentPeople.DN = fmt.Sprintf("cn=%s,%s,%s", currentPeople.CN, generateOUDN(pathPieces[:len(pathPieces)-1]), rt.PeopleDN)
 		}
 
 		if currentPeople.GIDNumber == nil {
 			glg.Fatalf("gid_number missing in '%s'", currentFile)
 		}
 
-		if _, ok = localPeople[currentPeople.dn]; ok {
-			return fmt.Errorf("dn %s already exists but was declared again in %s", currentPeople.dn, currentFile)
+		if _, ok = localPeople[currentPeople.DN]; ok {
+			return fmt.Errorf("dn %s already exists but was declared again in %s", currentPeople.DN, currentFile)
 		}
 
 		// set dummy description
@@ -304,10 +306,10 @@ func readPeopleConfiguration() error {
 			}
 
 			// set dn
-			currentPeople.Objects[userIndex].dn = fmt.Sprintf("uid=%s,%s", *currentPeople.Objects[userIndex].UID, currentPeople.dn)
+			currentPeople.Objects[userIndex].DN = fmt.Sprintf("uid=%s,%s", *currentPeople.Objects[userIndex].UID, currentPeople.DN)
 
 			// when UID generation is disabled the UID must be set in file
-			if !config.GenerateUID {
+			if !rt.Config.GenerateUID {
 				if currentPeople.Objects[userIndex].UIDNumber == nil {
 					glg.Fatalf("uid_number required because generate_uid is disabled but no value was given")
 				}
@@ -318,7 +320,7 @@ func readPeopleConfiguration() error {
 				currentPeople.Objects[userIndex].GIDNumber = currentPeople.GIDNumber
 			}
 
-			if *config.EnableSSHPublicKeys {
+			if *rt.Config.EnableSSHPublicKeys {
 				if currentPeople.Objects[userIndex].SSHPublicKey != nil {
 					// validate data is indeed a valid ssh key
 					_, _, _, _, err = ssh.ParseAuthorizedKey([]byte(*currentPeople.Objects[userIndex].SSHPublicKey))
@@ -331,16 +333,16 @@ func readPeopleConfiguration() error {
 				}
 			}
 
-			// add defaults if not otherwise configured
+			// add defaults if not otherwise rt.Configured
 			if currentPeople.Objects[userIndex].DisplayName == nil {
-				if config.Defaults.DisplayName == nil {
+				if rt.Config.Defaults.DisplayName == nil {
 					return fmt.Errorf("cannot read object: display_name not set in object and no default is defined")
 				}
 
 				// construct from default
 				currentPeople.Objects[userIndex].DisplayName = new(string)
 				// set given_name
-				*currentPeople.Objects[userIndex].DisplayName = strings.ReplaceAll(*config.Defaults.DisplayName, "%g", *currentPeople.Objects[userIndex].GivenName)
+				*currentPeople.Objects[userIndex].DisplayName = strings.ReplaceAll(*rt.Config.Defaults.DisplayName, "%g", *currentPeople.Objects[userIndex].GivenName)
 				// set surname
 				*currentPeople.Objects[userIndex].DisplayName = strings.ReplaceAll(*currentPeople.Objects[userIndex].DisplayName, "%l", *currentPeople.Objects[userIndex].Surname)
 				// set username
@@ -348,21 +350,21 @@ func readPeopleConfiguration() error {
 			}
 
 			if currentPeople.Objects[userIndex].LoginShell == nil {
-				if config.Defaults.LoginShell == nil {
+				if rt.Config.Defaults.LoginShell == nil {
 					return fmt.Errorf("cannot read object: login_shell not set in object and no default is defined")
 				}
-				currentPeople.Objects[userIndex].LoginShell = config.Defaults.LoginShell
+				currentPeople.Objects[userIndex].LoginShell = rt.Config.Defaults.LoginShell
 			}
 
 			if currentPeople.Objects[userIndex].Mail == nil {
-				if config.Defaults.Mail == nil {
+				if rt.Config.Defaults.Mail == nil {
 					return fmt.Errorf("cannot read object: mail not set in object and no default is defined")
 				}
 
 				// construct from default
 				currentPeople.Objects[userIndex].Mail = new(string)
 				// set given_name
-				*currentPeople.Objects[userIndex].Mail = strings.ReplaceAll(*config.Defaults.Mail, "%g", strings.ToLower(*currentPeople.Objects[userIndex].GivenName))
+				*currentPeople.Objects[userIndex].Mail = strings.ReplaceAll(*rt.Config.Defaults.Mail, "%g", strings.ToLower(*currentPeople.Objects[userIndex].GivenName))
 				// set surname
 				*currentPeople.Objects[userIndex].Mail = strings.ReplaceAll(*currentPeople.Objects[userIndex].Mail, "%l", strings.ToLower(*currentPeople.Objects[userIndex].Surname))
 				// set username
@@ -370,14 +372,14 @@ func readPeopleConfiguration() error {
 			}
 
 			if currentPeople.Objects[userIndex].HomeDir == nil {
-				if config.Defaults.HomeDir == nil {
+				if rt.Config.Defaults.HomeDir == nil {
 					return fmt.Errorf("cannot read object: home_dir not set in object and no default is defined")
 				}
 
 				// construct from default
 				currentPeople.Objects[userIndex].HomeDir = new(string)
 				// set given_name
-				*currentPeople.Objects[userIndex].HomeDir = strings.ReplaceAll(*config.Defaults.HomeDir, "%g", *currentPeople.Objects[userIndex].GivenName)
+				*currentPeople.Objects[userIndex].HomeDir = strings.ReplaceAll(*rt.Config.Defaults.HomeDir, "%g", *currentPeople.Objects[userIndex].GivenName)
 				// set surname
 				*currentPeople.Objects[userIndex].HomeDir = strings.ReplaceAll(*currentPeople.Objects[userIndex].HomeDir, "%l", *currentPeople.Objects[userIndex].Surname)
 				// set username
@@ -385,42 +387,42 @@ func readPeopleConfiguration() error {
 			}
 
 			if currentPeople.Objects[userIndex].UserPassword == nil {
-				if config.Defaults.UserPassword == nil {
+				if rt.Config.Defaults.UserPassword == nil {
 					return fmt.Errorf("cannot read object: user_password not set in object and no default is defined")
 				}
 				// construct from default
 				currentPeople.Objects[userIndex].UserPassword = new(string)
 				// set username
-				*currentPeople.Objects[userIndex].UserPassword = strings.ReplaceAll(*config.Defaults.UserPassword, "%u", *currentPeople.Objects[userIndex].UID)
+				*currentPeople.Objects[userIndex].UserPassword = strings.ReplaceAll(*rt.Config.Defaults.UserPassword, "%u", *currentPeople.Objects[userIndex].UID)
 			}
 
-			// verify the same user isn't configured multiple times
+			// verify the same user isn't rt.Configured multiple times
 			for i = range knownUsers {
 				if knownUsers[i] == *currentPeople.Objects[userIndex].UID {
-					return fmt.Errorf("user with username '%s' is configured multiple times", *currentPeople.Objects[userIndex].UID)
+					return fmt.Errorf("user with username '%s' is rt.Configured multiple times", *currentPeople.Objects[userIndex].UID)
 				}
 			}
 
 			// adding id to now known users
 			knownUsers = append(knownUsers, *currentPeople.Objects[userIndex].UID)
-			glg.Debugf("loaded local user with DN %s", currentPeople.Objects[userIndex].dn)
+			glg.Debugf("loaded local user with DN %s", currentPeople.Objects[userIndex].DN)
 		}
 
 		// add loaded file to global list of know user objects
-		localPeople[currentPeople.dn] = *currentPeople
+		localPeople[currentPeople.DN] = *currentPeople
 	}
 
-	glg.Infof("done reading people configuration file")
+	glg.Infof("done reading people rt.Configuration file")
 	return nil
 }
 
-// readGroupConfiguration reads a group config dir and performs basic sanity checks
+// readGroupConfiguration reads a group rt.Config dir and performs basic sanity checks
 func readGroupConfiguration() error {
 	var (
 		err          error
 		files        []string
 		currentFile  string
-		currentGroup *groupOfNames
+		currentGroup *models.GroupOfNames
 		yamlFile     []byte
 		i            int
 		j            int
@@ -430,12 +432,12 @@ func readGroupConfiguration() error {
 		relPath      string
 	)
 
-	glg.Infof("reading group configuration file")
+	glg.Infof("reading group rt.Configuration file")
 
-	err = filepath.Walk(filepath.Join(*config.GroupDir),
+	err = filepath.Walk(filepath.Join(*rt.Config.GroupDir),
 		func(path string, info os.FileInfo, err error) error {
 			var (
-				ou *organizationalUnit
+				ou *models.OrganizationalUnit
 			)
 
 			if err != nil {
@@ -446,21 +448,21 @@ func readGroupConfiguration() error {
 				// check if dir needs added as a new OU
 				// split path into dirs, each one will be its own OU in LDAP
 
-				relPath, _ = filepath.Rel(*config.GroupDir, path)
+				relPath, _ = filepath.Rel(*rt.Config.GroupDir, path)
 
 				if relPath != "." {
 					// only creating an OU of the path is not the people_dir
 
 					pathPieces = strings.Split(relPath, "/")
 
-					ou = new(organizationalUnit)
-					ou.cn = info.Name()
-					ou.description = "Managed by Monban"
+					ou = new(models.OrganizationalUnit)
+					ou.CN = info.Name()
+					ou.Description = "Managed by Monban"
 
 					if len(pathPieces) <= 1 {
-						ou.dn = fmt.Sprintf("ou=%s,%s", ou.cn, groupDN)
+						ou.DN = fmt.Sprintf("ou=%s,%s", ou.CN, rt.GroupDN)
 					} else {
-						ou.dn = fmt.Sprintf("ou=%s,%s,%s", ou.cn, generateOUDN(pathPieces[:len(pathPieces)-1]), groupDN)
+						ou.DN = fmt.Sprintf("ou=%s,%s,%s", ou.CN, generateOUDN(pathPieces[:len(pathPieces)-1]), rt.GroupDN)
 					}
 
 					localOUs = append(localOUs, ou)
@@ -482,7 +484,7 @@ func readGroupConfiguration() error {
 		if filepath.Base(currentFile) == "SUDOers" {
 
 			// only check SUDOers files when feature is enabled
-			if config.EnableSudo {
+			if rt.Config.EnableSudo {
 				err = readSUDOersFile(currentFile)
 				if err != nil {
 					glg.Errorf("failed to load SUDOers file: %s", err.Error())
@@ -500,7 +502,7 @@ func readGroupConfiguration() error {
 		}
 
 		// currentGroup needs to be reset before every Unmarshal
-		currentGroup = new(groupOfNames)
+		currentGroup = new(models.GroupOfNames)
 		err = yaml.Unmarshal(yamlFile, currentGroup)
 		if err != nil {
 			return fmt.Errorf("failed to parse group config file: %s", err.Error())
@@ -512,14 +514,14 @@ func readGroupConfiguration() error {
 		}
 
 		// generate DN
-		relPath, _ = filepath.Rel(*config.GroupDir, currentFile)
+		relPath, _ = filepath.Rel(*rt.Config.GroupDir, currentFile)
 		pathPieces = strings.Split(relPath, "/")
 		if len(pathPieces) <= 1 {
-			currentGroup.dn = fmt.Sprintf("cn=%s,%s", currentGroup.CN, groupDN)
+			currentGroup.DN = fmt.Sprintf("cn=%s,%s", currentGroup.CN, rt.GroupDN)
 		} else {
-			currentGroup.dn = fmt.Sprintf("cn=%s,%s,%s", currentGroup.CN, generateOUDN(pathPieces[:len(pathPieces)-1]), groupDN)
+			currentGroup.DN = fmt.Sprintf("cn=%s,%s,%s", currentGroup.CN, generateOUDN(pathPieces[:len(pathPieces)-1]), rt.GroupDN)
 		}
-		glg.Debugf("loaded local group with DN %s", currentGroup.dn)
+		glg.Debugf("loaded local group with DN %s", currentGroup.DN)
 
 		// check if description is set
 		if currentGroup.Description == "" {
@@ -535,7 +537,7 @@ func readGroupConfiguration() error {
 				}
 
 				if match > 1 {
-					return fmt.Errorf("duplicated member entry with uid %s in group '%s'", currentGroup.Members[i], currentGroup.dn)
+					return fmt.Errorf("duplicated member entry with uid %s in group '%s'", currentGroup.Members[i], currentGroup.DN)
 				}
 			}
 
@@ -544,7 +546,7 @@ func readGroupConfiguration() error {
 			glg.Debugf("loaded group member with uid %s", currentGroup.Members[i])
 		}
 
-		// verify members also exist within config
+		// verify members also exist within rt.Config
 		for i = range currentGroup.Members {
 			match = 0
 			for dn = range localPeople {
@@ -558,16 +560,16 @@ func readGroupConfiguration() error {
 			}
 
 			if match == 0 {
-				return fmt.Errorf("member uid %s in group %s doesn't exist as user object", currentGroup.Members[i], currentGroup.dn)
+				return fmt.Errorf("member uid %s in group %s doesn't exist as user object", currentGroup.Members[i], currentGroup.DN)
 			}
 		}
 
 		// add group to global list of groups
-		localGroups[currentGroup.dn] = *currentGroup
-		glg.Debugf("loaded local group with DN %s", currentGroup.dn)
+		localGroups[currentGroup.DN] = *currentGroup
+		glg.Debugf("loaded local group with DN %s", currentGroup.DN)
 	}
 
-	glg.Infof("done reading group configuration file")
+	glg.Infof("done reading group rt.Configuration file")
 	return nil
 }
 
@@ -587,13 +589,13 @@ func readSUDOersFile(file string) error {
 	var (
 		yamlFile   []byte
 		err        error
-		tmpSudoers sudoers
+		tmpSudoers models.Sudoers
 		relPath    string
 		pathPieces []string
 		dn         string
 		i          int
-		ou         organizationalUnit
-		tmpRole    sudoRole
+		ou         models.OrganizationalUnit
+		tmpRole    models.SudoRole
 	)
 
 	glg.Infof("reading SUDOers file %s", file)
@@ -605,7 +607,7 @@ func readSUDOersFile(file string) error {
 
 	err = yaml.Unmarshal(yamlFile, &tmpSudoers)
 	if err != nil {
-		return fmt.Errorf("failed to parse config file: %s", err.Error())
+		return fmt.Errorf("failed to parse rt.Config file: %s", err.Error())
 	}
 
 	// if there are no roles set, skip this file
@@ -615,31 +617,31 @@ func readSUDOersFile(file string) error {
 	}
 
 	// generate DN
-	relPath, _ = filepath.Rel(*config.GroupDir, file)
+	relPath, _ = filepath.Rel(*rt.Config.GroupDir, file)
 	pathPieces = strings.Split(relPath, "/")
 	if len(pathPieces) <= 1 {
-		dn = fmt.Sprintf("ou=SUDOers,%s", groupDN)
+		dn = fmt.Sprintf("ou=SUDOers,%s", rt.GroupDN)
 	} else {
-		dn = fmt.Sprintf("ou=SUDOers,%s,%s", generateOUDN(pathPieces[:len(pathPieces)-1]), groupDN)
+		dn = fmt.Sprintf("ou=SUDOers,%s,%s", generateOUDN(pathPieces[:len(pathPieces)-1]), rt.GroupDN)
 	}
 
 	// generate OU entry
-	ou.dn = dn
-	ou.cn = "SUDOers"
-	ou.description = "Managed by Monban"
+	ou.DN = dn
+	ou.CN = "SUDOers"
+	ou.Description = "Managed by Monban"
 	localOUs = append(localOUs, &ou)
-	glg.Debugf("found intermediate OU %s", ou.dn)
+	glg.Debugf("found intermediate OU %s", ou.DN)
 
 	if tmpSudoers.DisableDefaults {
 		glg.Debugf("defaults disabled for SUDOers file %s", file)
 	} else {
 		// adding default rule
-		if config.Defaults.Sudo != nil {
-			tmpRole = *config.Defaults.Sudo
-			tmpRole.dn = fmt.Sprintf("cn=Defaults,%s", dn)
+		if rt.Config.Defaults.Sudo != nil {
+			tmpRole = *rt.Config.Defaults.Sudo
+			tmpRole.DN = fmt.Sprintf("cn=Defaults,%s", dn)
 			localSudoRoles = append(localSudoRoles, tmpRole)
 
-			glg.Debugf("loaded default SUDOers role %s", tmpRole.dn)
+			glg.Debugf("loaded default SUDOers role %s", tmpRole.DN)
 		}
 	}
 
@@ -653,10 +655,10 @@ func readSUDOersFile(file string) error {
 			tmpSudoers.Roles[i].Description = "Managed by Monban"
 		}
 
-		tmpSudoers.Roles[i].dn = fmt.Sprintf("cn=%s,%s", tmpSudoers.Roles[i].CN, dn)
+		tmpSudoers.Roles[i].DN = fmt.Sprintf("cn=%s,%s", tmpSudoers.Roles[i].CN, dn)
 		localSudoRoles = append(localSudoRoles, tmpSudoers.Roles[i])
 
-		glg.Debugf("loaded sudoRole with DN %s", tmpSudoers.Roles[i].dn)
+		glg.Debugf("loaded sudoRole with DN %s", tmpSudoers.Roles[i].DN)
 	}
 
 	return nil

@@ -1,7 +1,54 @@
-package main
+// Package models implements structures and custom data types used within Mondan.
+package models
 
-// configuration contains general configuration data
-type configuration struct {
+import (
+	"github.com/go-ldap/ldap/v3"
+)
+
+const (
+	ObjectTypePosixAccount = iota
+	ObjectTypePosixGroup
+	ObjectTypeGroupOfNames
+	ObjectTypeOrganisationalUnit
+	ObjectTypeSudoRole
+)
+
+const (
+	TaskTypeCreate = iota
+	TaskTypeUpdate
+	TaskTypeDelete
+	TaskTypeAddMember
+	TaskTypeDeleteMember
+)
+
+// Runtime contains variables containing runtime information to be shared between modules.
+type Runtime struct {
+	// BasePath is the absolut path to the monban root dir
+	BasePath string
+	// Config points to the main config struct
+	Config *Configuration
+	// ConfigFile contains the main config file path
+	ConfigFile string
+	// GroupDN is the root dn in wich groups exist in
+	GroupDN string
+	// LatestUID contains global highest UIDNumber seen in peopleDN
+	LatestUID int
+	// LdapCon is the global LDAP connection struct
+	LdapCon *ldap.Conn
+	// LogLevel holds a string describing a desired log level
+	LogLevel string
+	// PeopleDN is the root dn in which people groups exist in
+	PeopleDN string
+	// Colo defines if diff output is colorful or not
+	UseColor bool
+	// Userdn contains the user dn to use for binding to LDAP
+	UserDN string
+	// UserPassword contains the user password to use for binding to LDAP
+	UserPassword string
+}
+
+// Configuration contains general configuration data
+type Configuration struct {
 	HostURI             *string `yaml:"host_uri"`
 	UserDN              *string `yaml:"user_dn"`
 	UserPassword        *string `yaml:"user_password"`
@@ -22,27 +69,27 @@ type configuration struct {
 		Mail         *string   `yaml:"mail"`
 		HomeDir      *string   `yaml:"home_dir"`
 		UserPassword *string   `yaml:"user_password"`
-		Sudo         *sudoRole `yaml:"sudo"`
+		Sudo         *SudoRole `yaml:"sudo"`
 	} `yaml:"defaults"`
 }
 
-// posixGroup contains information about a LDAP user group object
-type posixGroup struct {
-	dn          string         `yaml:"-"`
+// PosixGroup contains information about a LDAP user group object
+type PosixGroup struct {
+	DN          string         `yaml:"-"`
 	CN          string         `yaml:"cn"`
 	GIDNumber   *int           `yaml:"gid_number"`
 	Description string         `yaml:"description"`
-	Objects     []posixAccount `yaml:"objects"`
+	Objects     []PosixAccount `yaml:"objects"`
 }
 
-// posixAccount represents a LDAP user object
+// PosixAccount represents a LDAP user object
 //
 // also used as actionTask.data
 // create task: nil ptr means value will not be set
 // change task: nil ptr means no change of that attribute
 // delete task: only CN is set
-type posixAccount struct {
-	dn           string  `yaml:"-"`
+type PosixAccount struct {
+	DN           string  `yaml:"-"`
 	UID          *string `yaml:"username"` // also CN
 	UIDNumber    *int    `yaml:"uid_number"`
 	GIDNumber    *int    `yaml:"gid_number"`
@@ -56,18 +103,18 @@ type posixAccount struct {
 	UserPassword *string `yaml:"user_password"`
 }
 
-// groupOfNames contains information about a groups with members
-type groupOfNames struct {
-	dn          string   `yaml:"-"` // internal only
+// GroupOfNames contains information about a groups with members
+type GroupOfNames struct {
+	DN          string   `yaml:"-"` // internal only
 	CN          string   `yaml:"cn"`
 	Description string   `yaml:"description"`
 	Members     []string `yaml:"members"`
 }
 
-// actionTask defines a task to execute against a ldap target
-type actionTask struct {
+// ActionTask defines a task to execute against a ldap target
+type ActionTask struct {
 	// dn is not nil when an object is to be deleted or a member gets added/deleted
-	dn *string
+	DN *string
 	// data can contain different structs depending on the action and object type
 	//
 	// objectType == objectTypePosixAccount
@@ -81,7 +128,7 @@ type actionTask struct {
 	//		create: organizationalUnit
 	// objectType == objectTypeSudoRole
 	//    create, update: data is sudoRole struct
-	data interface{}
+	Data interface{}
 }
 
 // see https://github.com/go-yaml/yaml/issues/100
@@ -103,9 +150,9 @@ func (a *stringArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-// sudoRole defines a LDAP sudoRule object
-type sudoRole struct {
-	dn             string      `yaml:"dn"`
+// SudoRole defines a LDAP sudoRule object
+type SudoRole struct {
+	DN             string      `yaml:"dn"`
 	CN             string      `yaml:"name"`
 	Description    string      `yaml:"description"`
 	SudoUser       stringArray `yaml:"sudo_user"`
@@ -119,15 +166,15 @@ type sudoRole struct {
 	SudoOrder      *int        `yaml:"sudo_order"`
 }
 
-// sudoers describes a SUDOers file
-type sudoers struct {
+// Sudoers describes a SUDOers file
+type Sudoers struct {
 	DisableDefaults bool       `yaml:"disable_defaults"`
-	Roles           []sudoRole `yaml:"roles"`
+	Roles           []SudoRole `yaml:"roles"`
 }
 
-// organizationalUnit defines a LDAP OU object
-type organizationalUnit struct {
-	dn          string
-	cn          string
-	description string
+// OrganizationalUnit defines a LDAP OU object
+type OrganizationalUnit struct {
+	DN          string
+	CN          string
+	Description string
 }

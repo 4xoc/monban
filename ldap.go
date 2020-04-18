@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/4xoc/monban/models"
+
 	"github.com/go-ldap/ldap/v3"
 	"github.com/kpango/glg"
 )
@@ -16,13 +18,13 @@ func ldapConnect() (*ldap.Conn, error) {
 		err error
 	)
 
-	con, err = ldap.DialURL(*config.HostURI)
+	con, err = ldap.DialURL(*rt.Config.HostURI)
 	if err != nil {
 		return nil, err
 	}
 
 	// bind with given credentials
-	err = con.Bind(*config.UserDN, *config.UserPassword)
+	err = con.Bind(*rt.Config.UserDN, *rt.Config.UserPassword)
 	if err != nil {
 		return nil, err
 	}
@@ -36,21 +38,21 @@ func ldapLoadPeople() error {
 	var (
 		err       error
 		sr        *ldap.SearchResult
-		user      *posixAccount
-		group     *posixGroup
-		ou        *organizationalUnit
+		user      *models.PosixAccount
+		group     *models.PosixGroup
+		ou        *models.OrganizationalUnit
 		i         int
 		j         int
-		tmpPeople posixGroup
-		// class will be posixAccount or posixGroup
+		tmpPeople models.PosixGroup
+		// class will be models.PosixAccount or models.PosixGroup
 		class string
 	)
 
 	glg.Infof("reading people objects from LDAP")
 
-	// get a list of all existing objects within the peopleDN
-	sr, err = ldapCon.Search(&ldap.SearchRequest{
-		peopleDN,
+	// get a list of all existing objects within the rt.PeopleDN
+	sr, err = rt.LdapCon.Search(&ldap.SearchRequest{
+		rt.PeopleDN,
 		ldap.ScopeWholeSubtree,
 		ldap.NeverDerefAliases,
 		0,
@@ -72,19 +74,19 @@ func ldapLoadPeople() error {
 	// go through all user objects
 	// NOTE: this assumes the result is ordered in a way that children don't appear before its parent
 	for i = range sr.Entries {
-		if sr.Entries[i].DN == peopleDN {
-			// skip peopleDN object
+		if sr.Entries[i].DN == rt.PeopleDN {
+			// skip rt.PeopleDN object
 			continue
 		}
 
-		user = new(posixAccount)
-		group = new(posixGroup)
-		ou = new(organizationalUnit)
+		user = new(models.PosixAccount)
+		group = new(models.PosixGroup)
+		ou = new(models.OrganizationalUnit)
 
 		// set DN for all objects as it is unknown which object it is
-		group.dn = sr.Entries[i].DN
-		user.dn = sr.Entries[i].DN
-		ou.dn = sr.Entries[i].DN
+		group.DN = sr.Entries[i].DN
+		user.DN = sr.Entries[i].DN
+		ou.DN = sr.Entries[i].DN
 
 		// go through all attributes
 		for j = range sr.Entries[i].Attributes {
@@ -96,13 +98,15 @@ func ldapLoadPeople() error {
 			case "objectClass":
 				// there is more than one objectClass
 				for _, class = range sr.Entries[i].Attributes[j].Values {
-					if class == "posixAccount" || class == "posixGroup" || class == "organizationalUnit" {
+					if class == "posixAccount" ||
+						class == "posixGroup" ||
+						class == "organizationalUnit" {
 						break
 					}
 				}
 
 			case "ou":
-				ou.cn = sr.Entries[i].Attributes[j].Values[0]
+				ou.CN = sr.Entries[i].Attributes[j].Values[0]
 
 			case "cn":
 				group.CN = sr.Entries[i].Attributes[j].Values[0]
@@ -129,8 +133,8 @@ func ldapLoadPeople() error {
 				*user.UIDNumber, _ = strconv.Atoi(sr.Entries[i].Attributes[j].Values[0])
 
 				// determine the highest used UIDNumber
-				if *user.UIDNumber > latestUID {
-					latestUID = *user.UIDNumber
+				if *user.UIDNumber > rt.LatestUID {
+					rt.LatestUID = *user.UIDNumber
 				}
 
 			case "displayName":
@@ -154,28 +158,28 @@ func ldapLoadPeople() error {
 			}
 		}
 
-		// check if object was a posixAccount or posixGroup
+		// check objectClass
 		switch class {
 		case "posixAccount":
 			// add to global list of LDAP users
 			// NOTE: this is a workaround as append on struct member within a map is not supported
 			// see https://suraj.pro/post/golang_workaround/
-			tmpPeople = ldapPeople[strings.SplitAfterN(user.dn, ",", 2)[1]]
+			tmpPeople = ldapPeople[strings.SplitAfterN(user.DN, ",", 2)[1]]
 			tmpPeople.Objects = append(tmpPeople.Objects, *user)
-			ldapPeople[strings.SplitAfterN(user.dn, ",", 2)[1]] = tmpPeople
-			glg.Debugf("found ldap posixAccount %s", user.dn)
+			ldapPeople[strings.SplitAfterN(user.DN, ",", 2)[1]] = tmpPeople
+			glg.Debugf("found ldap posixAccount %s", user.DN)
 
 		case "posixGroup":
-			ldapPeople[group.dn] = *group
-			glg.Debugf("found ldap posixGroup %s", group.dn)
+			ldapPeople[group.DN] = *group
+			glg.Debugf("found ldap posixGroup %s", group.DN)
 
 		case "organizationalUnit":
 			ldapOUs = append(ldapOUs, ou)
-			glg.Debugf("found ldap intermediate OU %s", ou.dn)
+			glg.Debugf("found ldap intermediate OU %s", ou.DN)
 
 		default:
-			// using ou.dn but any other struct would work
-			glg.Errorf("skipping object because of unknown objectClass in %s", ou.dn)
+			// using ou.DN but any other struct would work
+			glg.Errorf("skipping object because of unknown objectClass in %s", ou.DN)
 		}
 	}
 
@@ -191,15 +195,15 @@ func ldapLoadGroups() error {
 		i     int
 		j     int
 		k     int
-		group *groupOfNames
-		ou    *organizationalUnit
-		sudo  *sudoRole
+		group *models.GroupOfNames
+		ou    *models.OrganizationalUnit
+		sudo  *models.SudoRole
 		class string
 	)
 
-	// get a list of all existing objects within the groupDN
-	sr, err = ldapCon.Search(&ldap.SearchRequest{
-		groupDN,
+	// get a list of all existing objects within the rt.GroupDN
+	sr, err = rt.LdapCon.Search(&ldap.SearchRequest{
+		rt.GroupDN,
 		ldap.ScopeWholeSubtree,
 		ldap.NeverDerefAliases,
 		0,
@@ -220,19 +224,19 @@ func ldapLoadGroups() error {
 	// go through all user objects
 	// NOTE: this assumes the result is ordered in a way that children don't appear before its parent
 	for i = range sr.Entries {
-		if sr.Entries[i].DN == groupDN {
-			// skip groupDN object
+		if sr.Entries[i].DN == rt.GroupDN {
+			// skip rt.GroupDN object
 			continue
 		}
 
-		group = new(groupOfNames)
-		ou = new(organizationalUnit)
-		sudo = new(sudoRole)
+		group = new(models.GroupOfNames)
+		ou = new(models.OrganizationalUnit)
+		sudo = new(models.SudoRole)
 
 		// set DN for all objects as it is unknown which object it is
-		group.dn = sr.Entries[i].DN
-		ou.dn = sr.Entries[i].DN
-		sudo.dn = sr.Entries[i].DN
+		group.DN = sr.Entries[i].DN
+		ou.DN = sr.Entries[i].DN
+		sudo.DN = sr.Entries[i].DN
 
 		// go through all attributes
 		for j = range sr.Entries[i].Attributes {
@@ -244,13 +248,15 @@ func ldapLoadGroups() error {
 			case "objectClass":
 				// there is more than one objectClass
 				for _, class = range sr.Entries[i].Attributes[j].Values {
-					if class == "groupOfNames" || class == "organizationalUnit" || class == "sudoRole" {
+					if class == "groupOfNames" ||
+						class == "organizationalUnit" ||
+						class == "sudoRole" {
 						break
 					}
 				}
 
 			case "ou":
-				ou.cn = sr.Entries[i].Attributes[j].Values[0]
+				ou.CN = sr.Entries[i].Attributes[j].Values[0]
 
 			case "cn":
 				group.CN = sr.Entries[i].Attributes[j].Values[0]
@@ -303,14 +309,14 @@ func ldapLoadGroups() error {
 			}
 		}
 
-		// check if object was a posixAccount or posixGroup
+		// check if object was a models.PosixAccount or models.PosixGroup
 		switch class {
 		case "groupOfNames":
 			// add to global list of LDAP groups
 			// NOTE: this is a workaround as append on struct member within a map is not supported
 			// see https://suraj.pro/post/golang_workaround/
-			ldapGroups[group.dn] = *group
-			glg.Debugf("found ldap groupOfNames %s", group.dn)
+			ldapGroups[group.DN] = *group
+			glg.Debugf("found ldap groupOfNames %s", group.DN)
 
 			for i = range group.Members {
 				if group.Members[i] == "uid=MonbanDummyMember" {
@@ -322,12 +328,11 @@ func ldapLoadGroups() error {
 
 		case "organizationalUnit":
 			ldapOUs = append(ldapOUs, ou)
-			glg.Debugf("found ldap intermediate OU %s", ou.dn)
+			glg.Debugf("found ldap intermediate OU %s", ou.DN)
 
 		case "sudoRole":
 			ldapSudoRoles = append(ldapSudoRoles, *sudo)
-			glg.Debugf("found ldap sudoRole %s", sudo.dn)
-
+			glg.Debugf("found ldap sudoRole %s", sudo.DN)
 		}
 	}
 
@@ -344,10 +349,10 @@ func ldapDeleteGroupOfNamesMember(group string, user string) error {
 	modify = ldap.NewModifyRequest(group, nil)
 	modify.Delete("member", []string{user})
 
-	return ldapCon.Modify(modify)
+	return rt.LdapCon.Modify(modify)
 }
 
-// ldapDeletePosixAccount delets a given posixAccount object from LDAP
+// ldapDeletePosixAccount delets a given models.PosixAccount object from LDAP
 func ldapDeletePosixAccount(dn string) error {
 	var (
 		err         error
@@ -356,7 +361,7 @@ func ldapDeletePosixAccount(dn string) error {
 	)
 
 	// delete user object
-	if err = ldapCon.Del(&ldap.DelRequest{
+	if err = rt.LdapCon.Del(&ldap.DelRequest{
 		DN:       dn,
 		Controls: nil,
 	}); err != nil {
@@ -371,11 +376,11 @@ func ldapDeletePosixAccount(dn string) error {
 
 	modify.Delete("memberUid", []string{dnFragments[0][4:]})
 
-	return ldapCon.Modify(modify)
+	return rt.LdapCon.Modify(modify)
 }
 
-// ldapCreatePosixAccount creates a new posixAccount object in LDAP
-func ldapCreatePosixAccount(user posixAccount) error {
+// ldapCreatePosixAccount creates a new models.PosixAccount object in LDAP
+func ldapCreatePosixAccount(user models.PosixAccount) error {
 	var (
 		err      error
 		add      *ldap.AddRequest
@@ -383,31 +388,31 @@ func ldapCreatePosixAccount(user posixAccount) error {
 		dnSplits []string
 	)
 
-	glg.Debugf("creating posixAccount %s", user.dn)
+	glg.Debugf("creating posixAccount %s", user.DN)
 
-	add = ldap.NewAddRequest(user.dn, nil)
+	add = ldap.NewAddRequest(user.DN, nil)
 
 	add.Attribute("objectClass", []string{
 		"inetOrgPerson",
 		"ldapPublicKey",
 		"organizationalPerson",
 		"person",
-		"posixAccount",
+		"models.PosixAccount",
 		"shadowAccount",
 		"top"})
 
-	dnSplits = strings.Split(user.dn, ",")
+	dnSplits = strings.Split(user.DN, ",")
 
 	// UIDNumber should be set if generateUID is false
-	if config.GenerateUID {
-		latestUID++
+	if rt.Config.GenerateUID {
+		rt.LatestUID++
 
-		if latestUID > config.MaxUID {
+		if rt.LatestUID > rt.Config.MaxUID {
 			glg.Fatalf("reached max_uid limit")
 		}
 
 		user.UIDNumber = new(int)
-		*user.UIDNumber = latestUID
+		*user.UIDNumber = rt.LatestUID
 	}
 
 	// strings
@@ -423,13 +428,13 @@ func ldapCreatePosixAccount(user posixAccount) error {
 	add.Attribute("mail", []string{*user.Mail})
 	add.Attribute("userPassword", []string{*user.UserPassword})
 
-	if *config.EnableSSHPublicKeys {
+	if *rt.Config.EnableSSHPublicKeys {
 		if user.SSHPublicKey != nil {
 			add.Attribute("sshPublicKey", []string{*user.SSHPublicKey})
 		}
 	}
 
-	if err = ldapCon.Add(add); err != nil {
+	if err = rt.LdapCon.Add(add); err != nil {
 		return err
 	}
 
@@ -440,18 +445,18 @@ func ldapCreatePosixAccount(user posixAccount) error {
 
 	modify.Add("memberUid", []string{*user.UID})
 
-	return ldapCon.Modify(modify)
+	return rt.LdapCon.Modify(modify)
 }
 
-// ldapUpdatePosixAccount updates an existing posixAccount object in LDAP
-func ldapUpdatePosixAccount(user posixAccount) error {
+// ldapUpdatePosixAccount updates an existing models.PosixAccount object in LDAP
+func ldapUpdatePosixAccount(user models.PosixAccount) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
 
-	glg.Debugf("updating posixAccount %s", user.dn)
+	glg.Debugf("updating posixAccount %s", user.DN)
 
-	modify = ldap.NewModifyRequest(user.dn, nil)
+	modify = ldap.NewModifyRequest(user.DN, nil)
 
 	if user.UID != nil {
 		modify.Replace("cn", []string{*user.UID})
@@ -493,16 +498,16 @@ func ldapUpdatePosixAccount(user posixAccount) error {
 		modify.Replace("userPassword", []string{*user.UserPassword})
 	}
 
-	if *config.EnableSSHPublicKeys {
+	if *rt.Config.EnableSSHPublicKeys {
 		if user.SSHPublicKey != nil {
 			modify.Replace("sshPublicKey", []string{*user.SSHPublicKey})
 		}
 	}
 
-	return ldapCon.Modify(modify)
+	return rt.LdapCon.Modify(modify)
 }
 
-// ldapAddGroupOfNamesMember adds a new given member to a LDAP groupOfNames
+// ldapAddGroupOfNamesMember adds a new given member to a LDAP models.GroupOfNames
 func ldapAddGroupOfNamesMember(group string, user string) error {
 	var (
 		modify *ldap.ModifyRequest
@@ -514,21 +519,21 @@ func ldapAddGroupOfNamesMember(group string, user string) error {
 
 	modify.Add("member", []string{user})
 
-	return ldapCon.Modify(modify)
+	return rt.LdapCon.Modify(modify)
 }
 
-// ldapCreatePosixGroup creates a new posixGroup on LDAP target
-func ldapCreatePosixGroup(group posixGroup) error {
+// ldapCreatePosixGroup creates a new models.PosixGroup on LDAP target
+func ldapCreatePosixGroup(group models.PosixGroup) error {
 	var (
 		add *ldap.AddRequest
 	)
 
-	glg.Debugf("creating posixGroup %s", group.dn)
+	glg.Debugf("creating posixGroup %s", group.DN)
 
-	add = ldap.NewAddRequest(group.dn, nil)
+	add = ldap.NewAddRequest(group.DN, nil)
 
 	add.Attribute("objectClass", []string{
-		"posixGroup",
+		"models.PosixGroup",
 		"top"})
 
 	// strings
@@ -536,18 +541,18 @@ func ldapCreatePosixGroup(group posixGroup) error {
 	add.Attribute("gidNumber", []string{strconv.Itoa(*group.GIDNumber)})
 	add.Attribute("description", []string{group.Description})
 
-	return ldapCon.Add(add)
+	return rt.LdapCon.Add(add)
 }
 
-// ldapUpdatePosixGroup updates a given posixGroup on LDAP target
-func ldapUpdatePosixGroup(group posixGroup) error {
+// ldapUpdatePosixGroup updates a given models.PosixGroup on LDAP target
+func ldapUpdatePosixGroup(group models.PosixGroup) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
 
-	glg.Debugf("updating posixGroup %s", group.dn)
+	glg.Debugf("updating posixGroup %s", group.DN)
 
-	modify = ldap.NewModifyRequest(group.dn, nil)
+	modify = ldap.NewModifyRequest(group.DN, nil)
 
 	if group.GIDNumber != nil {
 		modify.Replace("gidNumber", []string{strconv.Itoa(*group.GIDNumber)})
@@ -557,21 +562,21 @@ func ldapUpdatePosixGroup(group posixGroup) error {
 		modify.Replace("description", []string{group.Description})
 	}
 
-	return ldapCon.Modify(modify)
+	return rt.LdapCon.Modify(modify)
 }
 
 // ldapCreateGroupOfNames creates a new user group on LDAP target
-func ldapCreateGroupOfNames(group groupOfNames) error {
+func ldapCreateGroupOfNames(group models.GroupOfNames) error {
 	var (
 		add *ldap.AddRequest
 	)
 
-	glg.Debugf("creating groupOfNames %s", group.dn)
+	glg.Debugf("creating groupOfNames %s", group.DN)
 
-	add = ldap.NewAddRequest(group.dn, nil)
+	add = ldap.NewAddRequest(group.DN, nil)
 
 	add.Attribute("objectClass", []string{
-		"groupOfNames",
+		"models.GroupOfNames",
 		"top"})
 
 	// strings
@@ -579,67 +584,67 @@ func ldapCreateGroupOfNames(group groupOfNames) error {
 	add.Attribute("member", []string{"uid=MonbanDummyMember"})
 	add.Attribute("description", []string{group.Description})
 
-	return ldapCon.Add(add)
+	return rt.LdapCon.Add(add)
 }
 
-// ldapUpdateGroupOfNames updates an existing groupOfNames object in LDAP
-func ldapUpdateGroupOfNames(group groupOfNames) error {
+// ldapUpdateGroupOfNames updates an existing models.GroupOfNames object in LDAP
+func ldapUpdateGroupOfNames(group models.GroupOfNames) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
 
-	glg.Debugf("updating groupOfName %s", group.dn)
+	glg.Debugf("updating groupOfName %s", group.DN)
 
-	modify = ldap.NewModifyRequest(group.dn, nil)
+	modify = ldap.NewModifyRequest(group.DN, nil)
 
 	if group.Description != "" {
 		modify.Replace("description", []string{group.Description})
 	}
 
-	return ldapCon.Modify(modify)
+	return rt.LdapCon.Modify(modify)
 }
 
 // ldapCreateOrganisationalUnit creates a new OU on LDAP target
-func ldapCreateOrganisationalUnit(ou *organizationalUnit) error {
+func ldapCreateOrganisationalUnit(ou *models.OrganizationalUnit) error {
 	var (
 		add *ldap.AddRequest
 	)
 
-	glg.Debugf("creating organizationalUnit %s", ou.dn)
+	glg.Debugf("creating organizationalUnit %s", ou.DN)
 
-	add = ldap.NewAddRequest(ou.dn, nil)
+	add = ldap.NewAddRequest(ou.DN, nil)
 
 	add.Attribute("objectClass", []string{
-		"organizationalUnit",
+		"models.OrganizationalUnit",
 		"top"})
 
 	// strings
-	add.Attribute("ou", []string{ou.cn})
-	add.Attribute("description", []string{ou.description})
+	add.Attribute("ou", []string{ou.CN})
+	add.Attribute("description", []string{ou.Description})
 
-	return ldapCon.Add(add)
+	return rt.LdapCon.Add(add)
 }
 
 // ldapDeleteObject deletes any object identified by its dn
 func ldapDeleteObject(dn string) error {
-	return ldapCon.Del(&ldap.DelRequest{
+	return rt.LdapCon.Del(&ldap.DelRequest{
 		DN:       dn,
 		Controls: nil,
 	})
 }
 
-// ldapCreateSudoRole creates a new sudoRole on LDAP target
-func ldapCreateSudoRole(role sudoRole) error {
+// ldapCreateSudoRole creates a new models.SudoRole on LDAP target
+func ldapCreateSudoRole(role models.SudoRole) error {
 	var (
 		add *ldap.AddRequest
 	)
 
-	glg.Debugf("creating sudoRole %s", role.dn)
+	glg.Debugf("creating sudoRole %s", role.DN)
 
-	add = ldap.NewAddRequest(role.dn, nil)
+	add = ldap.NewAddRequest(role.DN, nil)
 
 	add.Attribute("objectClass", []string{
-		"sudoRole",
+		"models.SudoRole",
 		"top"})
 
 	// cn & description are always set
@@ -682,20 +687,20 @@ func ldapCreateSudoRole(role sudoRole) error {
 		add.Attribute("sudoNotAfter", role.SudoNotAfter)
 	}
 
-	return ldapCon.Add(add)
+	return rt.LdapCon.Add(add)
 }
 
-// ldapUpdateSudoRole updates an existing sudoRole on LDAP target; doesn't update CN
-func ldapUpdateSudoRole(role sudoRole) error {
+// ldapUpdateSudoRole updates an existing models.SudoRole on LDAP target; doesn't update CN
+func ldapUpdateSudoRole(role models.SudoRole) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
 
 	// this is different than other updates as values can be deleted
 
-	glg.Debugf("updating sudoRole %s", role.dn)
+	glg.Debugf("updating sudoRole %s", role.DN)
 
-	modify = ldap.NewModifyRequest(role.dn, nil)
+	modify = ldap.NewModifyRequest(role.DN, nil)
 
 	// can be deleted
 	if role.SudoOrder != nil {
@@ -757,5 +762,5 @@ func ldapUpdateSudoRole(role sudoRole) error {
 		modify.Replace("sudoNotAfter", []string{})
 	}
 
-	return ldapCon.Modify(modify)
+	return rt.LdapCon.Modify(modify)
 }
