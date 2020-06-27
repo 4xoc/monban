@@ -156,37 +156,6 @@ func readConfiguration(c *cli.Context) error {
 
 	glg.Infof("done reading main rt.Configuration file")
 
-	// init maps
-	// taskList is split into multiple maps to systematically structure the tasks (which gets rid of a lot of loops
-	// further down the line). The first map is for each models.ObjectType, the second for the actions for such models.ObjectType.
-	// To not constantly check if every key is initialized the whole map is run through make(). Checks then only require
-	// to look for map length.
-	taskList[models.ObjectTypePosixAccount] = make(map[int][]*models.ActionTask)
-	taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate] = make([]*models.ActionTask, 0, 0)
-	taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate] = make([]*models.ActionTask, 0, 0)
-	taskList[models.ObjectTypePosixAccount][models.TaskTypeDelete] = make([]*models.ActionTask, 0, 0)
-
-	taskList[models.ObjectTypePosixGroup] = make(map[int][]*models.ActionTask)
-	taskList[models.ObjectTypePosixGroup][models.TaskTypeCreate] = make([]*models.ActionTask, 0, 0)
-	taskList[models.ObjectTypePosixGroup][models.TaskTypeUpdate] = make([]*models.ActionTask, 0, 0)
-	taskList[models.ObjectTypePosixGroup][models.TaskTypeDelete] = make([]*models.ActionTask, 0, 0)
-
-	taskList[models.ObjectTypeGroupOfNames] = make(map[int][]*models.ActionTask)
-	taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate] = make([]*models.ActionTask, 0, 0)
-	taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate] = make([]*models.ActionTask, 0, 0)
-	taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDelete] = make([]*models.ActionTask, 0, 0)
-	taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember] = make([]*models.ActionTask, 0, 0)
-	taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDeleteMember] = make([]*models.ActionTask, 0, 0)
-
-	taskList[models.ObjectTypeOrganisationalUnit] = make(map[int][]*models.ActionTask)
-	taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeCreate] = make([]*models.ActionTask, 0, 0)
-	taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeDelete] = make([]*models.ActionTask, 0, 0)
-
-	taskList[models.ObjectTypeSudoRole] = make(map[int][]*models.ActionTask)
-	taskList[models.ObjectTypeSudoRole][models.TaskTypeCreate] = make([]*models.ActionTask, 0, 0)
-	taskList[models.ObjectTypeSudoRole][models.TaskTypeUpdate] = make([]*models.ActionTask, 0, 0)
-	taskList[models.ObjectTypeSudoRole][models.TaskTypeDelete] = make([]*models.ActionTask, 0, 0)
-
 	return nil
 }
 
@@ -409,7 +378,7 @@ func readPeopleConfiguration() error {
 		}
 
 		// add loaded file to global list of know user objects
-		localPeople[currentPeople.DN] = *currentPeople
+		localPeople[currentPeople.DN] = currentPeople
 	}
 
 	glg.Infof("done reading people rt.Configuration file")
@@ -565,7 +534,7 @@ func readGroupConfiguration() error {
 		}
 
 		// add group to global list of groups
-		localGroups[currentGroup.DN] = *currentGroup
+		localGroups[currentGroup.DN] = currentGroup
 		glg.Debugf("loaded local group with DN %s", currentGroup.DN)
 	}
 
@@ -639,7 +608,7 @@ func readSUDOersFile(file string) error {
 		if rt.Config.Defaults.Sudo != nil {
 			tmpRole = *rt.Config.Defaults.Sudo
 			tmpRole.DN = fmt.Sprintf("cn=Defaults,%s", dn)
-			localSudoRoles = append(localSudoRoles, tmpRole)
+			localSudoRoles = append(localSudoRoles, &tmpRole)
 
 			glg.Debugf("loaded default SUDOers role %s", tmpRole.DN)
 		}
@@ -656,7 +625,7 @@ func readSUDOersFile(file string) error {
 		}
 
 		tmpSudoers.Roles[i].DN = fmt.Sprintf("cn=%s,%s", tmpSudoers.Roles[i].CN, dn)
-		localSudoRoles = append(localSudoRoles, tmpSudoers.Roles[i])
+		localSudoRoles = append(localSudoRoles, &tmpSudoers.Roles[i])
 
 		glg.Debugf("loaded sudoRole with DN %s", tmpSudoers.Roles[i].DN)
 	}

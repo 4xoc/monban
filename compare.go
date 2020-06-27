@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/4xoc/monban/models"
+	"github.com/4xoc/monban/tasks"
 
 	"github.com/kpango/glg"
 )
@@ -16,7 +17,7 @@ func compareOUs() error {
 		i     int
 		j     int
 		match bool
-		task  *models.ActionTask
+		task  *tasks.Task
 	)
 
 	// sort both slices before comparing them
@@ -42,10 +43,12 @@ func compareOUs() error {
 
 		if !match {
 			glg.Debugf("marked intermediate OU for creation %s", localOUs[i].DN)
-			task = new(models.ActionTask)
-			task.Data = localOUs[i]
-			taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeCreate] = append(taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeCreate], task)
-			taskListCount++
+			task = new(tasks.Task)
+			task.DN = &localOUs[i].DN
+			task.Data.OrganizationalUnit = localOUs[i]
+			task.ObjectClass = tasks.ObjectClassOrganisationalUnit
+			task.TaskType = tasks.TaskCreate
+			queueCreateOU.Push(task)
 		}
 	}
 
@@ -62,10 +65,11 @@ func compareOUs() error {
 
 		if !match {
 			glg.Debugf("marked intermediate OU for deletion %s", ldapOUs[i].DN)
-			task = new(models.ActionTask)
+			task = new(tasks.Task)
 			task.DN = &ldapOUs[i].DN
-			taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeDelete] = append(taskList[models.ObjectTypeOrganisationalUnit][models.TaskTypeDelete], task)
-			taskListCount++
+			task.ObjectClass = tasks.ObjectClassOrganisationalUnit
+			task.TaskType = tasks.TaskDelete
+			queueDeleteOU.Push(task)
 		}
 	}
 
@@ -79,7 +83,7 @@ func comparePosixGroups() error {
 		userIndex      int
 		ldapUserIndex  int
 		foundUser      bool
-		task           *models.ActionTask
+		task           *tasks.Task
 		group          *models.PosixGroup
 		ok             bool
 		err            error
@@ -102,10 +106,12 @@ func comparePosixGroups() error {
 			glg.Debugf("marked posixGroup for creation %s", dn)
 
 			// add task to create group
-			task = new(models.ActionTask)
-			task.Data = localPeople[dn]
-			taskList[models.ObjectTypePosixGroup][models.TaskTypeCreate] = append(taskList[models.ObjectTypePosixGroup][models.TaskTypeCreate], task)
-			taskListCount++
+			task = new(tasks.Task)
+			task.DN = &dn
+			task.Data.PosixGroup = localPeople[dn]
+			task.ObjectClass = tasks.ObjectClassPosixGroup
+			task.TaskType = tasks.TaskCreate
+			queueCreatePG.Push(task)
 		}
 
 		// check for localPeopleGroup diff
@@ -131,10 +137,12 @@ func comparePosixGroups() error {
 				glg.Debugf("marked posixGroup for update %s", dn)
 
 				// add task to update group
-				task = new(models.ActionTask)
-				task.Data = *group
-				taskList[models.ObjectTypePosixGroup][models.TaskTypeUpdate] = append(taskList[models.ObjectTypePosixGroup][models.TaskTypeUpdate], task)
-				taskListCount++
+				task = new(tasks.Task)
+				task.DN = &dn
+				task.Data.PosixGroup = group
+				task.ObjectClass = tasks.ObjectClassPosixGroup
+				task.TaskType = tasks.TaskUpdate
+				queueUpdatePG.Push(task)
 			}
 		}
 
@@ -149,7 +157,7 @@ func comparePosixGroups() error {
 					if *localPeople[dn].Objects[userIndex].UID == *ldapPeople[dn].Objects[ldapUserIndex].UID {
 						// user exists in LDAP but might need update
 						foundUser = true
-						err = comparePosixAccount(&localPeople[dn].Objects[userIndex], &ldapPeople[dn].Objects[ldapUserIndex])
+						err = comparePosixAccount(localPeople[dn].Objects[userIndex], ldapPeople[dn].Objects[ldapUserIndex])
 						if err != nil {
 							return err
 						}
@@ -161,10 +169,12 @@ func comparePosixGroups() error {
 				glg.Debugf("marked posixAccount for creation %s", localPeople[dn].Objects[userIndex].DN)
 
 				// create new task
-				task = new(models.ActionTask)
-				task.Data = localPeople[dn].Objects[userIndex]
-				taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate] = append(taskList[models.ObjectTypePosixAccount][models.TaskTypeCreate], task)
-				taskListCount++
+				task = new(tasks.Task)
+				task.DN = &localPeople[dn].Objects[userIndex].DN
+				task.Data.PosixAccount = localPeople[dn].Objects[userIndex]
+				task.ObjectClass = tasks.ObjectClassPosixAccount
+				task.TaskType = tasks.TaskCreate
+				queueCreatePA.Push(task)
 			}
 		}
 	}
@@ -176,11 +186,12 @@ func comparePosixGroups() error {
 		if _, ok = localPeople[dn]; !ok {
 			glg.Debugf("marked posixGroup for deletion %s", dn)
 
-			task = new(models.ActionTask)
+			task = new(tasks.Task)
 			task.DN = new(string)
 			*task.DN = dn
-			taskList[models.ObjectTypePosixGroup][models.TaskTypeDelete] = append(taskList[models.ObjectTypePosixGroup][models.TaskTypeDelete], task)
-			taskListCount++
+			task.ObjectClass = tasks.ObjectClassPosixGroup
+			task.TaskType = tasks.TaskDelete
+			queueDeletePG.Push(task)
 		}
 
 		for ldapUserIndex = range ldapPeople[dn].Objects {
@@ -194,10 +205,11 @@ func comparePosixGroups() error {
 			if !foundUser {
 				glg.Debugf("marked posixAccount for deletion %s", ldapPeople[dn].Objects[ldapUserIndex].DN)
 
-				task = new(models.ActionTask)
+				task = new(tasks.Task)
 				task.DN = &ldapPeople[dn].Objects[ldapUserIndex].DN
-				taskList[models.ObjectTypePosixAccount][models.TaskTypeDelete] = append(taskList[models.ObjectTypePosixAccount][models.TaskTypeDelete], task)
-				taskListCount++
+				task.ObjectClass = tasks.ObjectClassPosixAccount
+				task.TaskType = tasks.TaskDelete
+				queueDeletePA.Push(task)
 			}
 		}
 	}
@@ -212,7 +224,7 @@ func comparePosixGroups() error {
 // local must always be the rt.Config file user while remote is the read data from LDAP
 func comparePosixAccount(local *models.PosixAccount, remote *models.PosixAccount) error {
 	var (
-		task *models.ActionTask
+		task *tasks.Task
 		// userDiff contains only those values that need to be changed and their new values
 		userDiff *models.PosixAccount
 		mismatch bool
@@ -302,10 +314,12 @@ func comparePosixAccount(local *models.PosixAccount, remote *models.PosixAccount
 	if mismatch {
 		glg.Debugf("marked posixAccount for update %s", local.DN)
 
-		task = new(models.ActionTask)
-		task.Data = *userDiff
-		taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate] = append(taskList[models.ObjectTypePosixAccount][models.TaskTypeUpdate], task)
-		taskListCount++
+		task = new(tasks.Task)
+		task.DN = &local.DN
+		task.Data.PosixAccount = userDiff
+		task.ObjectClass = tasks.ObjectClassPosixAccount
+		task.TaskType = tasks.TaskUpdate
+		queueUpdatePA.Push(task)
 	}
 
 	return nil
@@ -319,7 +333,7 @@ func compareGroupOfNames() error {
 		index           int
 		ldapIndex       int
 		match           bool
-		task            *models.ActionTask
+		task            *tasks.Task
 		dn2             string
 		tmpGroupOfNames *models.GroupOfNames
 	)
@@ -333,26 +347,29 @@ func compareGroupOfNames() error {
 			glg.Debugf("marked groupOfNames for creation %s", dn)
 
 			// add task to create group
-			task = new(models.ActionTask)
-			task.Data = localGroups[dn]
-			taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate] = append(taskList[models.ObjectTypeGroupOfNames][models.TaskTypeCreate], task)
-			taskListCount++
+			task = new(tasks.Task)
+			task.DN = &dn
+			task.Data.GroupOfNames = localGroups[dn]
+			task.ObjectClass = tasks.ObjectClassGroupOfNames
+			task.TaskType = tasks.TaskCreate
+			queueCreateGoN.Push(task)
 
 			// check for members to be created in this new group
 			for index = range localGroups[dn].Members {
-				task = new(models.ActionTask)
+				task = new(tasks.Task)
 				task.DN = new(string)
 				*task.DN = dn
 
 				// get full user DN
-				task.Data = getDNFromUsername(localGroups[dn].Members[index])
-				if task.Data.(string) == "" {
+				task.Data.DN = getDNFromUsername(localGroups[dn].Members[index])
+				if *task.Data.DN == "" {
 					glg.Errorf("unknown username for member %s", localGroups[dn].Members[index])
 					continue
 				}
 
-				taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember] = append(taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember], task)
-				taskListCount++
+				task.ObjectClass = tasks.ObjectClassGroupOfNames
+				task.TaskType = tasks.TaskAddMember
+				queueAddMemberGoN.Push(task)
 			}
 			continue
 		}
@@ -365,10 +382,12 @@ func compareGroupOfNames() error {
 			tmpGroupOfNames.Description = localGroups[dn].Description
 			tmpGroupOfNames.DN = dn
 
-			task = new(models.ActionTask)
-			task.Data = *tmpGroupOfNames
-			taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate] = append(taskList[models.ObjectTypeGroupOfNames][models.TaskTypeUpdate], task)
-			taskListCount++
+			task = new(tasks.Task)
+			task.DN = &dn
+			task.Data.GroupOfNames = tmpGroupOfNames
+			task.ObjectClass = tasks.ObjectClassGroupOfNames
+			task.TaskType = tasks.TaskUpdate
+			queueUpdateGoN.Push(task)
 		}
 
 		for index = range localGroups[dn].Members {
@@ -380,20 +399,22 @@ func compareGroupOfNames() error {
 			}
 
 			if !match {
-				task = new(models.ActionTask)
+				task = new(tasks.Task)
 				// dn will change but task.DN should not
 				task.DN = new(string)
 				*task.DN = dn
-				task.Data = getDNFromUsername(localGroups[dn].Members[index])
+				task.Data.DN = getDNFromUsername(localGroups[dn].Members[index])
 
-				if task.Data.(string) == "" {
+				if *task.Data.DN == "" {
 					glg.Errorf("unknown username for member %s", localGroups[dn].Members[index])
 					continue
 				}
 
-				glg.Debugf("marked member for creation %s", task.Data.(string))
-				taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember] = append(taskList[models.ObjectTypeGroupOfNames][models.TaskTypeAddMember], task)
-				taskListCount++
+				glg.Debugf("marked member for creation %s", *task.Data.DN)
+
+				task.ObjectClass = tasks.ObjectClassGroupOfNames
+				task.TaskType = tasks.TaskAddMember
+				queueAddMemberGoN.Push(task)
 			}
 		}
 	}
@@ -404,12 +425,14 @@ func compareGroupOfNames() error {
 		if _, ok = localGroups[dn]; !ok {
 			glg.Debugf("marked GroupOfNames for deletion %s", dn)
 
-			task = new(models.ActionTask)
+			task = new(tasks.Task)
 			// dn will change but task.DN should not
 			task.DN = new(string)
 			*task.DN = dn
-			taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDelete] = append(taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDelete], task)
-			taskListCount++
+			task.Data.GroupOfNames = tmpGroupOfNames
+			task.ObjectClass = tasks.ObjectClassGroupOfNames
+			task.TaskType = tasks.TaskDelete
+			queueDeleteGoN.Push(task)
 			continue
 		}
 
@@ -435,10 +458,10 @@ func compareGroupOfNames() error {
 				for dn2 = range ldapPeople {
 					for index = range ldapPeople[dn2].Objects {
 						if ldapGroups[dn].Members[ldapIndex] == *ldapPeople[dn2].Objects[index].UID {
-							task = new(models.ActionTask)
+							task = new(tasks.Task)
 							task.DN = new(string)
 							*task.DN = dn
-							task.Data = ldapPeople[dn2].Objects[index].DN
+							task.Data.DN = &ldapPeople[dn2].Objects[index].DN
 							// fast leaving of loops
 							break out2
 						}
@@ -446,8 +469,10 @@ func compareGroupOfNames() error {
 				}
 
 				glg.Debugf("marked member for deletion %s", ldapPeople[dn2].Objects[index].DN)
-				taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDeleteMember] = append(taskList[models.ObjectTypeGroupOfNames][models.TaskTypeDeleteMember], task)
-				taskListCount++
+
+				task.ObjectClass = tasks.ObjectClassGroupOfNames
+				task.TaskType = tasks.TaskDeleteMember
+				queueDelMemberGoN.Push(task)
 			}
 		}
 	}
@@ -463,7 +488,7 @@ func compareSudoRoles() error {
 		i     int
 		j     int
 		match bool
-		task  *models.ActionTask
+		task  *tasks.Task
 	)
 
 	glg.Info("comparing sudoGroups")
@@ -494,10 +519,12 @@ func compareSudoRoles() error {
 
 		if !match {
 			glg.Debugf("marked sudoRole for creation %s", localSudoRoles[i].DN)
-			task = new(models.ActionTask)
-			task.Data = localSudoRoles[i]
-			taskList[models.ObjectTypeSudoRole][models.TaskTypeCreate] = append(taskList[models.ObjectTypeSudoRole][models.TaskTypeCreate], task)
-			taskListCount++
+			task = new(tasks.Task)
+			task.DN = &localSudoRoles[i].DN
+			task.Data.SudoRole = localSudoRoles[i]
+			task.ObjectClass = tasks.ObjectClassSudoRole
+			task.TaskType = tasks.TaskCreate
+			queueCreateSR.Push(task)
 		}
 	}
 
@@ -514,10 +541,11 @@ func compareSudoRoles() error {
 
 		if !match {
 			glg.Debugf("marked sudoRole for deletion %s", ldapSudoRoles[i].DN)
-			task = new(models.ActionTask)
+			task = new(tasks.Task)
 			task.DN = &ldapSudoRoles[i].DN
-			taskList[models.ObjectTypeSudoRole][models.TaskTypeDelete] = append(taskList[models.ObjectTypeSudoRole][models.TaskTypeDelete], task)
-			taskListCount++
+			task.ObjectClass = tasks.ObjectClassSudoRole
+			task.TaskType = tasks.TaskDelete
+			queueDeleteSR.Push(task)
 		}
 	}
 
@@ -526,9 +554,9 @@ func compareSudoRoles() error {
 }
 
 // compareSudoRole checks two models.SudoRole objects for differences
-func compareSudoRole(local models.SudoRole, remote models.SudoRole) {
+func compareSudoRole(local *models.SudoRole, remote *models.SudoRole) {
 	var (
-		task     models.ActionTask
+		task     tasks.Task
 		mismatch bool
 	)
 
@@ -580,16 +608,17 @@ func compareSudoRole(local models.SudoRole, remote models.SudoRole) {
 
 	if mismatch {
 		// create update task
-		task.Data = local
-		taskList[models.ObjectTypeSudoRole][models.TaskTypeUpdate] = append(taskList[models.ObjectTypeSudoRole][models.TaskTypeUpdate], &task)
-		taskListCount++
-
 		glg.Debugf("marked sudoRole for update %s", local.DN)
+
+		task.Data.SudoRole = local
+		task.ObjectClass = tasks.ObjectClassSudoRole
+		task.TaskType = tasks.TaskUpdate
+		queueUpdateSR.Push(&task)
 	}
 }
 
 // getDNFromUsername returns the full DN of a user object identified by its username
-func getDNFromUsername(uid string) string {
+func getDNFromUsername(uid string) *string {
 	var (
 		pgDN string
 		i    int
@@ -599,10 +628,10 @@ func getDNFromUsername(uid string) string {
 	for pgDN = range localPeople {
 		for i = range localPeople[pgDN].Objects {
 			if *localPeople[pgDN].Objects[i].UID == uid {
-				return localPeople[pgDN].Objects[i].DN
+				return &localPeople[pgDN].Objects[i].DN
 			}
 		}
 	}
 
-	return dn
+	return &dn
 }

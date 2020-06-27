@@ -43,7 +43,7 @@ func ldapLoadPeople() error {
 		ou        *models.OrganizationalUnit
 		i         int
 		j         int
-		tmpPeople models.PosixGroup
+		tmpPeople *models.PosixGroup
 		// class will be models.PosixAccount or models.PosixGroup
 		class string
 	)
@@ -165,12 +165,12 @@ func ldapLoadPeople() error {
 			// NOTE: this is a workaround as append on struct member within a map is not supported
 			// see https://suraj.pro/post/golang_workaround/
 			tmpPeople = ldapPeople[strings.SplitAfterN(user.DN, ",", 2)[1]]
-			tmpPeople.Objects = append(tmpPeople.Objects, *user)
+			tmpPeople.Objects = append(tmpPeople.Objects, user)
 			ldapPeople[strings.SplitAfterN(user.DN, ",", 2)[1]] = tmpPeople
 			glg.Debugf("found ldap posixAccount %s", user.DN)
 
 		case "posixGroup":
-			ldapPeople[group.DN] = *group
+			ldapPeople[group.DN] = group
 			glg.Debugf("found ldap posixGroup %s", group.DN)
 
 		case "organizationalUnit":
@@ -315,7 +315,7 @@ func ldapLoadGroups() error {
 			// add to global list of LDAP groups
 			// NOTE: this is a workaround as append on struct member within a map is not supported
 			// see https://suraj.pro/post/golang_workaround/
-			ldapGroups[group.DN] = *group
+			ldapGroups[group.DN] = group
 			glg.Debugf("found ldap groupOfNames %s", group.DN)
 
 			for i = range group.Members {
@@ -331,7 +331,7 @@ func ldapLoadGroups() error {
 			glg.Debugf("found ldap intermediate OU %s", ou.DN)
 
 		case "sudoRole":
-			ldapSudoRoles = append(ldapSudoRoles, *sudo)
+			ldapSudoRoles = append(ldapSudoRoles, sudo)
 			glg.Debugf("found ldap sudoRole %s", sudo.DN)
 		}
 	}
@@ -341,19 +341,19 @@ func ldapLoadGroups() error {
 }
 
 // ldapDeleteGroupOfNamesMember deletes a given user from a LDAP group
-func ldapDeleteGroupOfNamesMember(group string, user string) error {
+func ldapDeleteGroupOfNamesMember(group *string, user *string) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
 
-	modify = ldap.NewModifyRequest(group, nil)
-	modify.Delete("member", []string{user})
+	modify = ldap.NewModifyRequest(*group, nil)
+	modify.Delete("member", []string{*user})
 
 	return rt.LdapCon.Modify(modify)
 }
 
 // ldapDeletePosixAccount delets a given models.PosixAccount object from LDAP
-func ldapDeletePosixAccount(dn string) error {
+func ldapDeletePosixAccount(dn *string) error {
 	var (
 		err         error
 		modify      *ldap.ModifyRequest
@@ -362,14 +362,14 @@ func ldapDeletePosixAccount(dn string) error {
 
 	// delete user object
 	if err = rt.LdapCon.Del(&ldap.DelRequest{
-		DN:       dn,
+		DN:       *dn,
 		Controls: nil,
 	}); err != nil {
 		return err
 	}
 
 	// delete memberUid reference in UnixGroup
-	dnFragments = strings.Split(dn, ",")
+	dnFragments = strings.Split(*dn, ",")
 
 	glg.Debugf("deleting posixGroup member in %s", strings.Join(dnFragments[1:], ","))
 	modify = ldap.NewModifyRequest(strings.Join(dnFragments[1:], ","), nil)
@@ -380,7 +380,7 @@ func ldapDeletePosixAccount(dn string) error {
 }
 
 // ldapCreatePosixAccount creates a new models.PosixAccount object in LDAP
-func ldapCreatePosixAccount(user models.PosixAccount) error {
+func ldapCreatePosixAccount(user *models.PosixAccount) error {
 	var (
 		err      error
 		add      *ldap.AddRequest
@@ -449,7 +449,7 @@ func ldapCreatePosixAccount(user models.PosixAccount) error {
 }
 
 // ldapUpdatePosixAccount updates an existing models.PosixAccount object in LDAP
-func ldapUpdatePosixAccount(user models.PosixAccount) error {
+func ldapUpdatePosixAccount(user *models.PosixAccount) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
@@ -508,22 +508,22 @@ func ldapUpdatePosixAccount(user models.PosixAccount) error {
 }
 
 // ldapAddGroupOfNamesMember adds a new given member to a LDAP models.GroupOfNames
-func ldapAddGroupOfNamesMember(group string, user string) error {
+func ldapAddGroupOfNamesMember(group *string, user *string) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
 
 	glg.Debugf("adding groupOfNames member in %s", group)
 
-	modify = ldap.NewModifyRequest(group, nil)
+	modify = ldap.NewModifyRequest(*group, nil)
 
-	modify.Add("member", []string{user})
+	modify.Add("member", []string{*user})
 
 	return rt.LdapCon.Modify(modify)
 }
 
 // ldapCreatePosixGroup creates a new models.PosixGroup on LDAP target
-func ldapCreatePosixGroup(group models.PosixGroup) error {
+func ldapCreatePosixGroup(group *models.PosixGroup) error {
 	var (
 		add *ldap.AddRequest
 	)
@@ -545,7 +545,7 @@ func ldapCreatePosixGroup(group models.PosixGroup) error {
 }
 
 // ldapUpdatePosixGroup updates a given models.PosixGroup on LDAP target
-func ldapUpdatePosixGroup(group models.PosixGroup) error {
+func ldapUpdatePosixGroup(group *models.PosixGroup) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
@@ -566,7 +566,7 @@ func ldapUpdatePosixGroup(group models.PosixGroup) error {
 }
 
 // ldapCreateGroupOfNames creates a new user group on LDAP target
-func ldapCreateGroupOfNames(group models.GroupOfNames) error {
+func ldapCreateGroupOfNames(group *models.GroupOfNames) error {
 	var (
 		add *ldap.AddRequest
 	)
@@ -588,7 +588,7 @@ func ldapCreateGroupOfNames(group models.GroupOfNames) error {
 }
 
 // ldapUpdateGroupOfNames updates an existing models.GroupOfNames object in LDAP
-func ldapUpdateGroupOfNames(group models.GroupOfNames) error {
+func ldapUpdateGroupOfNames(group *models.GroupOfNames) error {
 	var (
 		modify *ldap.ModifyRequest
 	)
@@ -626,15 +626,15 @@ func ldapCreateOrganisationalUnit(ou *models.OrganizationalUnit) error {
 }
 
 // ldapDeleteObject deletes any object identified by its dn
-func ldapDeleteObject(dn string) error {
+func ldapDeleteObject(dn *string) error {
 	return rt.LdapCon.Del(&ldap.DelRequest{
-		DN:       dn,
+		DN:       *dn,
 		Controls: nil,
 	})
 }
 
 // ldapCreateSudoRole creates a new models.SudoRole on LDAP target
-func ldapCreateSudoRole(role models.SudoRole) error {
+func ldapCreateSudoRole(role *models.SudoRole) error {
 	var (
 		add *ldap.AddRequest
 	)
@@ -691,7 +691,7 @@ func ldapCreateSudoRole(role models.SudoRole) error {
 }
 
 // ldapUpdateSudoRole updates an existing models.SudoRole on LDAP target; doesn't update CN
-func ldapUpdateSudoRole(role models.SudoRole) error {
+func ldapUpdateSudoRole(role *models.SudoRole) error {
 	var (
 		modify *ldap.ModifyRequest
 	)

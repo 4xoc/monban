@@ -1,3 +1,4 @@
 monban-*
 *.tar.gz
 sha256sums.txt
+coverage.out

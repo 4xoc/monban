@@ -32,3 +32,6 @@ playground:
 
 playground-clean:
 	docker rm -f my-openldap-container
+
+test:
+	go test -coverprofile=coverage.out

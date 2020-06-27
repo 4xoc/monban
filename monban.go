@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/4xoc/monban/models"
+	"github.com/4xoc/monban/tasks"
 
 	"github.com/kpango/glg"
 	"github.com/urfave/cli/v2"
@@ -15,26 +16,48 @@ import (
 var (
 	rt models.Runtime
 	// localPeople holds a map of all users and their organisational parent group
-	localPeople map[string]models.PosixGroup = make(map[string]models.PosixGroup)
+	localPeople map[string]*models.PosixGroup = make(map[string]*models.PosixGroup)
 	// ldapPeople holds a map of all users and their organisational parent group existing in LDAP
-	ldapPeople map[string]models.PosixGroup = make(map[string]models.PosixGroup)
+	ldapPeople map[string]*models.PosixGroup = make(map[string]*models.PosixGroup)
 	// localGroups holds a map of all unixGroups and their members
-	localGroups map[string]models.GroupOfNames = make(map[string]models.GroupOfNames)
+	localGroups map[string]*models.GroupOfNames = make(map[string]*models.GroupOfNames)
 	// ldapGroups holds a map of all groups and their members existing in LDAP
-	ldapGroups map[string]models.GroupOfNames = make(map[string]models.GroupOfNames)
-	// taskList contains all tasks to be executed in order to sync LDAP with configured values
-	// it is mapped by object type and action
-	taskList map[int]map[int][]*models.ActionTask = make(map[int]map[int][]*models.ActionTask)
-	// taskListCount contains the number of planned changes to be synced
-	taskListCount int
+	ldapGroups map[string]*models.GroupOfNames = make(map[string]*models.GroupOfNames)
+
+	// OrganizationalUnit queuek
+	queueCreateOU tasks.Queue = tasks.Queue{}
+	queueDeleteOU tasks.Queue = tasks.Queue{}
+
+	// PosixGroup queues
+	queueCreatePG tasks.Queue = tasks.Queue{}
+	queueUpdatePG tasks.Queue = tasks.Queue{}
+	queueDeletePG tasks.Queue = tasks.Queue{}
+
+	// PosixAccount queues
+	queueCreatePA tasks.Queue = tasks.Queue{}
+	queueUpdatePA tasks.Queue = tasks.Queue{}
+	queueDeletePA tasks.Queue = tasks.Queue{}
+
+	// GroupOfNames queues
+	queueCreateGoN    tasks.Queue = tasks.Queue{}
+	queueUpdateGoN    tasks.Queue = tasks.Queue{}
+	queueAddMemberGoN tasks.Queue = tasks.Queue{}
+	queueDelMemberGoN tasks.Queue = tasks.Queue{}
+	queueDeleteGoN    tasks.Queue = tasks.Queue{}
+
+	// SudoRole queues
+	queueCreateSR tasks.Queue = tasks.Queue{}
+	queueUpdateSR tasks.Queue = tasks.Queue{}
+	queueDeleteSR tasks.Queue = tasks.Queue{}
+
 	// localOUs holds all locally found OUs
 	localOUs []*models.OrganizationalUnit
 	// ldapOUs holds all existing OUs on target
 	ldapOUs []*models.OrganizationalUnit
 	// localSUDOers contains a map of ou=SUDOers DN and it's set of roles configured in file
-	localSudoRoles []models.SudoRole
+	localSudoRoles []*models.SudoRole
 	// ldapSUDOers contains a map of ou=SUDOers DN and it's set of roles on LDAP target
-	ldapSudoRoles []models.SudoRole
+	ldapSudoRoles []*models.SudoRole
 
 	// filled at build time
 	Version string
@@ -182,7 +205,7 @@ func main() {
 						return fmt.Errorf("failed to compare groupOfNames objects: %s", err.Error())
 					}
 
-					if taskListCount == 0 {
+					if tasks.TotalLength() == 0 {
 						glg.Infof("Data comparison complete. No changes to be synced.")
 						return nil
 					}
@@ -234,9 +257,9 @@ func main() {
 						return fmt.Errorf("failed to compare sudoRole objects: %s", err.Error())
 					}
 
-					glg.Infof("Data comparison complete. %d changes detected", taskListCount)
+					glg.Infof("Data comparison complete. %d changes detected", tasks.TotalLength())
 
-					if taskListCount == 0 {
+					if tasks.TotalLength() == 0 {
 						return nil
 					}
 

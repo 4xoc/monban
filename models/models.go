@@ -5,22 +5,6 @@ import (
 	"github.com/go-ldap/ldap/v3"
 )
 
-const (
-	ObjectTypePosixAccount = iota
-	ObjectTypePosixGroup
-	ObjectTypeGroupOfNames
-	ObjectTypeOrganisationalUnit
-	ObjectTypeSudoRole
-)
-
-const (
-	TaskTypeCreate = iota
-	TaskTypeUpdate
-	TaskTypeDelete
-	TaskTypeAddMember
-	TaskTypeDeleteMember
-)
-
 // Runtime contains variables containing runtime information to be shared between modules.
 type Runtime struct {
 	// BasePath is the absolut path to the monban root dir
@@ -75,11 +59,11 @@ type Configuration struct {
 
 // PosixGroup contains information about a LDAP user group object
 type PosixGroup struct {
-	DN          string         `yaml:"-"`
-	CN          string         `yaml:"cn"`
-	GIDNumber   *int           `yaml:"gid_number"`
-	Description string         `yaml:"description"`
-	Objects     []PosixAccount `yaml:"objects"`
+	DN          string          `yaml:"-"`
+	CN          string          `yaml:"cn"`
+	GIDNumber   *int            `yaml:"gid_number"`
+	Description string          `yaml:"description"`
+	Objects     []*PosixAccount `yaml:"objects"`
 }
 
 // PosixAccount represents a LDAP user object
@@ -109,26 +93,6 @@ type GroupOfNames struct {
 	CN          string   `yaml:"cn"`
 	Description string   `yaml:"description"`
 	Members     []string `yaml:"members"`
-}
-
-// ActionTask defines a task to execute against a ldap target
-type ActionTask struct {
-	// dn is not nil when an object is to be deleted or a member gets added/deleted
-	DN *string
-	// data can contain different structs depending on the action and object type
-	//
-	// objectType == objectTypePosixAccount
-	//		data is posixAccount struct
-	// objectType == objectTypePosixGroup
-	//    data is posixGroup struct
-	// objectType == objectTypeGroupOfNames
-	//    create, update: data is groupOfNames struct
-	//    add or delete member: (string) value to add or remove
-	// objectType == objectTypeOrganisationalUnit
-	//		create: organizationalUnit
-	// objectType == objectTypeSudoRole
-	//    create, update: data is sudoRole struct
-	Data interface{}
 }
 
 // see https://github.com/go-yaml/yaml/issues/100
